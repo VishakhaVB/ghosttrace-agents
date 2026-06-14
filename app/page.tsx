@@ -1,19 +1,14 @@
 "use client";
 
-import { AgentCard } from "@/components/AgentCard";
-import { RiskMeter } from "@/components/RiskMeter";
-import { Timeline, type TimelineEvent as UiTimelineEvent } from "@/components/Timeline";
 import {
   UploadPanel,
   type InvestigationPayload,
 } from "@/components/UploadPanel";
-import { VerdictPanel } from "@/components/VerdictPanel";
 import { useInvestigation, type InvestigationControllerData } from "@/hooks/useInvestigation";
 import { mockAnalyzeResponse } from "@/lib/mockData";
 import type {
   AgentData,
-  ArchitectureNode,
-  ArchitectureReport,
+  ForensicVerdict,
   PredictedFailure,
   RiskMetric,
   RiskSeverity,
@@ -24,15 +19,12 @@ import {
   Activity,
   AlertTriangle,
   BrainCircuit,
-  CircuitBoard,
-  DatabaseZap,
-  GitBranch,
+  Clock3,
+  FileWarning,
   Loader2,
-  Network,
   Radio,
   Radar,
   ShieldAlert,
-  Zap,
   type LucideIcon,
 } from "lucide-react";
 
@@ -44,20 +36,19 @@ const fallbackData: InvestigationControllerData = {
 };
 
 const sectionVariants: Variants = {
-  hidden: { opacity: 0, y: 32 },
+  hidden: { opacity: 0, y: 20 },
   show: {
     opacity: 1,
     y: 0,
-    transition: { duration: 0.72, ease: [0.22, 1, 0.36, 1] },
+    transition: { duration: 0.55, ease: [0.22, 1, 0.36, 1] },
   },
 };
 
 export default function Home() {
   const investigation = useInvestigation();
   const activeData = investigation.data ?? fallbackData;
-  const architecture = activeData.architectureReport;
   const metrics = buildRiskMeters(activeData);
-  const timeline = activeData.timeline.map(toUiTimelineEvent);
+  const timeline = activeData.timeline.slice(0, 4);
   const verdict = activeData.verdict;
 
   function handleLaunch(payload: InvestigationPayload) {
@@ -81,7 +72,7 @@ export default function Home() {
         usedFallback={activeData.usedFallback}
       />
 
-      <section className="relative mx-auto w-full max-w-7xl px-4 pb-12 sm:px-6 lg:px-10">
+      <section className="relative mx-auto w-full max-w-6xl px-4 pb-8 sm:px-6 lg:px-8">
         <UploadPanel onLaunch={handleLaunch} />
         <InvestigationProgress
           loading={investigation.loading}
@@ -91,22 +82,11 @@ export default function Home() {
         />
       </section>
 
-      <motion.section
-        className="mx-auto grid w-full max-w-7xl gap-5 px-4 py-10 sm:px-6 lg:grid-cols-4 lg:px-10"
-        variants={sectionVariants}
-        initial="hidden"
-        whileInView="show"
-        viewport={{ once: true, margin: "-120px" }}
-      >
+      <section className="mx-auto grid w-full max-w-6xl gap-4 px-4 py-6 sm:grid-cols-2 sm:px-6 lg:grid-cols-4 lg:px-8">
         {metrics.map((metric) => (
-          <RiskMeter
-            key={metric.id}
-            score={metric.value}
-            label={metric.label}
-            severity={metric.severity}
-          />
+          <CompactRiskCard key={metric.id} metric={metric} />
         ))}
-      </motion.section>
+      </section>
 
       <WarRoomSection
         agents={activeData.agents}
@@ -114,20 +94,11 @@ export default function Home() {
         requestId={activeData.requestId ?? "mock-investigation"}
       />
 
-      <ArchitectureSection architecture={architecture} />
+      <CompactTimelineSection events={timeline} />
 
-      <Timeline events={timeline} />
-
-      <FailureProjectionSection failures={activeData.predictedFailures} />
-
-      <VerdictPanel
-        verdict={verdict.verdict}
-        rootCause={verdict.rootCause}
-        risks={verdict.detectedRisks}
-        predictedFailures={verdict.predictedFailures.map(
-          (failure) => `${failure.title}: ${failure.description}`,
-        )}
-        severity={verdict.severity}
+      <CompactVerdictSection
+        verdict={verdict}
+        failures={activeData.predictedFailures.slice(0, 3)}
       />
     </main>
   );
@@ -147,86 +118,82 @@ function HeroStatus({
   usedFallback: boolean;
 }) {
   return (
-    <section className="relative isolate overflow-hidden px-4 pb-12 pt-10 sm:px-6 lg:px-10 lg:pt-16">
-      <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_50%_8%,rgba(34,211,238,0.2),transparent_34%),radial-gradient(circle_at_80%_34%,rgba(139,92,246,0.16),transparent_28%),radial-gradient(circle_at_12%_64%,rgba(248,113,113,0.1),transparent_26%)]" />
+    <section className="relative isolate overflow-hidden px-4 pb-8 pt-8 sm:px-6 lg:px-8 lg:pt-12">
+      <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_50%_0%,rgba(34,211,238,0.18),transparent_32%),radial-gradient(circle_at_82%_20%,rgba(139,92,246,0.12),transparent_26%)]" />
       <motion.div
-        className="pointer-events-none absolute inset-0 -z-10 opacity-[0.16]"
+        className="pointer-events-none absolute inset-0 -z-10 opacity-[0.12]"
         style={{
           backgroundImage:
-            "linear-gradient(rgba(34,211,238,0.24) 1px, transparent 1px), linear-gradient(90deg, rgba(139,92,246,0.16) 1px, transparent 1px)",
+            "linear-gradient(rgba(34,211,238,0.22) 1px, transparent 1px), linear-gradient(90deg, rgba(139,92,246,0.16) 1px, transparent 1px)",
           backgroundSize: "72px 72px",
         }}
         animate={{ backgroundPosition: ["0px 0px", "72px 72px"] }}
         transition={{ duration: 24, repeat: Infinity, ease: "linear" }}
       />
 
-      <div className="mx-auto grid max-w-7xl gap-8 border-b border-cyan-300/15 pb-10 lg:grid-cols-[minmax(0,1fr)_420px] lg:items-end">
+      <div className="mx-auto grid max-w-6xl gap-6 border-b border-cyan-300/15 pb-8 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-end">
         <motion.div
-          initial={{ opacity: 0, y: 26 }}
+          initial={{ opacity: 0, y: 18 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.72, ease: [0.22, 1, 0.36, 1] }}
+          transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
         >
-          <div className="inline-flex items-center gap-3 border border-cyan-300/20 bg-cyan-300/8 px-4 py-2 font-mono text-xs uppercase tracking-[0.24em] text-cyan-200">
+          <div className="inline-flex items-center gap-3 rounded-md border border-cyan-300/20 bg-cyan-300/8 px-3 py-2 font-mono text-[0.68rem] uppercase tracking-[0.2em] text-cyan-200">
             <motion.span
-              className="h-2 w-2 bg-emerald-300 shadow-[0_0_18px_rgba(52,211,153,0.9)]"
-              animate={{ scale: [1, 1.8, 1], opacity: [0.5, 1, 0.5] }}
+              className="h-2 w-2 rounded-full bg-emerald-300 shadow-[0_0_18px_rgba(52,211,153,0.9)]"
+              animate={{ scale: [1, 1.6, 1], opacity: [0.5, 1, 0.5] }}
               transition={{ duration: 1.45, repeat: Infinity }}
             />
-            AI forensic intelligence platform
+            Forensic engine online
           </div>
-          <h1 className="mt-6 max-w-5xl text-5xl font-black uppercase leading-none tracking-normal text-white sm:text-7xl lg:text-8xl">
+          <h1 className="mt-5 text-4xl font-black uppercase leading-none tracking-normal text-white sm:text-6xl">
             Ghost Trace
           </h1>
-          <p className="mt-5 max-w-3xl text-base leading-8 text-slate-300 sm:text-lg">
-            A cinematic multi-agent war room that ingests repository evidence,
-            reconstructs engineering collapse, predicts failure cascades, and
-            seals an AI forensic verdict.
+          <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-300 sm:text-base">
+            Upload a repository and get a concise AI forensic report: risk,
+            agents, timeline, and verdict.
           </p>
         </motion.div>
 
         <motion.aside
-          className="relative overflow-hidden border border-cyan-300/20 bg-slate-950/68 p-5 shadow-[0_30px_120px_rgba(0,0,0,0.54)] backdrop-blur-2xl"
-          initial={{ opacity: 0, scale: 0.96, y: 24 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          transition={{ duration: 0.78, delay: 0.12, ease: [0.22, 1, 0.36, 1] }}
+          className="relative overflow-hidden rounded-md border border-cyan-300/20 bg-slate-950/68 p-4 shadow-[0_20px_80px_rgba(0,0,0,0.42)] backdrop-blur-2xl"
+          initial={{ opacity: 0, y: 18 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.55, delay: 0.08, ease: [0.22, 1, 0.36, 1] }}
         >
-          <div className="absolute inset-0 bg-[linear-gradient(rgba(34,211,238,0.06)_1px,transparent_1px),linear-gradient(90deg,rgba(139,92,246,0.045)_1px,transparent_1px)] bg-[size:28px_28px] opacity-60" />
-          <div className="relative">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <p className="font-mono text-[0.68rem] uppercase tracking-[0.24em] text-slate-500">
-                  command core
-                </p>
-                <p className="mt-2 font-mono text-sm font-black uppercase text-cyan-200">
-                  {status.replaceAll("_", " ")}
-                </p>
-              </div>
-              {loading ? (
-                <Loader2 className="h-5 w-5 animate-spin text-cyan-300" />
-              ) : (
-                <Radio className="h-5 w-5 text-cyan-300" />
-              )}
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="font-mono text-[0.65rem] uppercase tracking-[0.2em] text-slate-500">
+                status
+              </p>
+              <p className="mt-1 font-mono text-sm font-bold uppercase text-cyan-200">
+                {status.replaceAll("_", " ")}
+              </p>
             </div>
+            {loading ? (
+              <Loader2 className="h-5 w-5 animate-spin text-cyan-300" />
+            ) : (
+              <Radio className="h-5 w-5 text-cyan-300" />
+            )}
+          </div>
 
-            <div className="mt-5">
-              <div className="mb-2 flex justify-between font-mono text-[0.68rem] uppercase tracking-[0.18em] text-slate-500">
-                <span>{phase.replaceAll("_", " ")}</span>
-                <span className="text-cyan-200">{Math.round(progress)}%</span>
-              </div>
-              <div className="h-2 overflow-hidden bg-slate-900">
-                <motion.div
-                  className="h-full bg-gradient-to-r from-cyan-300 via-blue-400 to-violet-400"
-                  animate={{ width: `${progress}%` }}
-                  transition={{ duration: 0.45, ease: "easeOut" }}
-                />
-              </div>
+          <div className="mt-4">
+            <div className="mb-2 flex justify-between font-mono text-[0.65rem] uppercase tracking-[0.16em] text-slate-500">
+              <span>{phase.replaceAll("_", " ")}</span>
+              <span className="text-cyan-200">{Math.round(progress)}%</span>
             </div>
+            <div className="h-2 overflow-hidden rounded-full bg-slate-900">
+              <motion.div
+                className="h-full rounded-full bg-gradient-to-r from-cyan-300 via-blue-400 to-violet-400"
+                animate={{ width: `${progress}%` }}
+                transition={{ duration: 0.35, ease: "easeOut" }}
+              />
+            </div>
+          </div>
 
-            <div className="mt-5 grid grid-cols-3 gap-3">
-              <HeroTile icon={Radar} label="scan" value={loading ? "LIVE" : "READY"} />
-              <HeroTile icon={BrainCircuit} label="agents" value="05" />
-              <HeroTile icon={ShieldAlert} label="fallback" value={usedFallback ? "ARMED" : "OFF"} />
-            </div>
+          <div className="mt-4 grid grid-cols-3 gap-2">
+            <HeroTile icon={Radar} label="scan" value={loading ? "live" : "ready"} />
+            <HeroTile icon={BrainCircuit} label="agents" value="5" />
+            <HeroTile icon={ShieldAlert} label="fallback" value={usedFallback ? "on" : "off"} />
           </div>
         </motion.aside>
       </div>
@@ -244,12 +211,12 @@ function HeroTile({
   value: string;
 }) {
   return (
-    <div className="border border-white/10 bg-slate-950/60 p-3">
+    <div className="rounded border border-white/10 bg-slate-950/60 p-2">
       <Icon className="h-4 w-4 text-cyan-300" />
-      <p className="mt-3 font-mono text-[0.6rem] uppercase tracking-[0.18em] text-slate-500">
+      <p className="mt-2 font-mono text-[0.58rem] uppercase tracking-[0.14em] text-slate-500">
         {label}
       </p>
-      <p className="mt-1 font-mono text-xs font-bold text-white">{value}</p>
+      <p className="font-mono text-xs font-bold uppercase text-white">{value}</p>
     </div>
   );
 }
@@ -269,25 +236,25 @@ function InvestigationProgress({
     <AnimatePresence>
       {(loading || error) && (
         <motion.div
-          className="mt-5 overflow-hidden border border-cyan-300/18 bg-slate-950/72 p-4 backdrop-blur-xl"
-          initial={{ opacity: 0, y: -12 }}
+          className="mt-4 overflow-hidden rounded-md border border-cyan-300/18 bg-slate-950/72 p-4 backdrop-blur-xl"
+          initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -12 }}
+          exit={{ opacity: 0, y: -10 }}
         >
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-3">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex min-w-0 items-center gap-3">
               {loading ? (
-                <Loader2 className="h-5 w-5 animate-spin text-cyan-300" />
+                <Loader2 className="h-5 w-5 shrink-0 animate-spin text-cyan-300" />
               ) : (
-                <AlertTriangle className="h-5 w-5 text-amber-300" />
+                <AlertTriangle className="h-5 w-5 shrink-0 text-amber-300" />
               )}
-              <div>
-                <p className="font-mono text-xs uppercase tracking-[0.22em] text-cyan-200">
+              <div className="min-w-0">
+                <p className="truncate font-mono text-xs uppercase tracking-[0.2em] text-cyan-200">
                   {phase.replaceAll("_", " ")}
                 </p>
-                <p className="mt-1 text-sm text-slate-400">
-                  {error ?? "AI agents are reconstructing the collapse timeline."}
-                </p>
+                {error ? (
+                  <p className="mt-1 line-clamp-1 text-sm text-slate-400">{error}</p>
+                ) : null}
               </div>
             </div>
             <p className="font-mono text-sm font-bold text-white">{Math.round(progress)}%</p>
@@ -308,32 +275,28 @@ function WarRoomSection({
   requestId: string;
 }) {
   return (
-    <section className="relative mx-auto w-full max-w-7xl px-4 py-16 sm:px-6 lg:px-10">
+    <section className="relative mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
       <SectionHeader
-        eyebrow="LIVE AI WAR ROOM"
-        title="Agents debating repository evidence"
-        description="Each specialist receives the same reconstructed intelligence and surfaces a competing slice of the collapse story."
+        eyebrow="AI agents"
+        title="Key findings"
         meta={requestId}
       />
 
       <motion.div
-        className="mt-7 grid gap-5 lg:grid-cols-5"
+        className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3"
         variants={{
           hidden: { opacity: 0 },
-          show: { opacity: 1, transition: { staggerChildren: 0.08 } },
+          show: { opacity: 1, transition: { staggerChildren: 0.06 } },
         }}
         initial="hidden"
         whileInView="show"
-        viewport={{ once: true, margin: "-120px" }}
+        viewport={{ once: true, margin: "-100px" }}
       >
-        {agents.map((agent) => (
-          <AgentCard
+        {agents.slice(0, 5).map((agent) => (
+          <CompactAgentCard
             key={agent.id}
-            role={agent.displayName}
-            message={agent.message}
-            confidence={agent.confidence}
+            agent={agent}
             status={toAgentCardStatus(agent, loading)}
-            evidence={agent.evidence.map((item) => item.label)}
           />
         ))}
       </motion.div>
@@ -341,200 +304,143 @@ function WarRoomSection({
   );
 }
 
-function ArchitectureSection({ architecture }: { architecture: ArchitectureReport }) {
-  const nodes = architecture.nodes.length > 0 ? architecture.nodes : fallbackArchitectureNodes(architecture);
+function CompactRiskCard({ metric }: { metric: RiskMetric }) {
+  const severity = normalizeSeverity(metric.severity);
+  const value = Math.max(0, Math.min(100, Math.round(metric.value)));
 
   return (
-    <motion.section
-      className="relative mx-auto w-full max-w-7xl px-4 py-16 sm:px-6 lg:px-10"
+    <motion.article
+      className={`relative overflow-hidden rounded-md border bg-slate-950/72 p-4 shadow-[0_16px_60px_rgba(0,0,0,0.34)] backdrop-blur-xl ${severityBorder(severity)}`}
       variants={sectionVariants}
       initial="hidden"
       whileInView="show"
-      viewport={{ once: true, margin: "-120px" }}
+      viewport={{ once: true, margin: "-80px" }}
+      whileHover={{ y: -3 }}
     >
-      <SectionHeader
-        eyebrow="ARCHITECTURE INTELLIGENCE"
-        title="Service topology reconstructed"
-        description={architecture.summary ?? "GHOST TRACE mapped system boundaries, dependency pressure, duplicated modules, and drift corridors."}
-        meta={`${architecture.detectedServices.length} services`}
-      />
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <p className="font-mono text-[0.62rem] uppercase tracking-[0.16em] text-slate-500">
+            {severity}
+          </p>
+          <h3 className="mt-1 text-base font-bold leading-tight text-white">
+            {metric.label}
+          </h3>
+        </div>
+        <div className={`rounded border px-2 py-1 font-mono text-xs font-bold ${severityBadge(severity)}`}>
+          {value}%
+        </div>
+      </div>
 
-      <div className="mt-7 grid gap-5 lg:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.9fr)]">
-        <div className="relative min-h-[440px] overflow-hidden border border-cyan-300/18 bg-slate-950/64 p-5 shadow-[0_30px_130px_rgba(0,0,0,0.52)] backdrop-blur-2xl">
-          <div className="absolute inset-0 bg-[linear-gradient(rgba(34,211,238,0.055)_1px,transparent_1px),linear-gradient(90deg,rgba(139,92,246,0.045)_1px,transparent_1px)] bg-[size:42px_42px]" />
-          <div className="relative h-full min-h-[398px]">
-            {nodes.slice(0, 8).map((node, index) => (
-              <ArchitectureNodeChip
-                key={node.id}
-                node={node}
-                index={index}
-                total={Math.min(nodes.length, 8)}
-              />
-            ))}
-            <motion.div
-              className="absolute left-1/2 top-1/2 grid h-28 w-28 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border border-cyan-300/30 bg-cyan-300/10 text-cyan-200 shadow-[0_0_70px_rgba(34,211,238,0.2)]"
-              animate={{ rotate: 360, scale: [1, 1.04, 1] }}
-              transition={{
-                rotate: { duration: 18, repeat: Infinity, ease: "linear" },
-                scale: { duration: 3, repeat: Infinity },
-              }}
+      <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-slate-900">
+        <motion.div
+          className={`h-full rounded-full ${severityBar(severity)}`}
+          initial={{ width: 0 }}
+          whileInView={{ width: `${value}%` }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.7, ease: "easeOut" }}
+        />
+      </div>
+    </motion.article>
+  );
+}
+
+function CompactAgentCard({
+  agent,
+  status,
+}: {
+  agent: AgentData;
+  status: "active" | "analyzing" | "warning";
+}) {
+  const statusSeverity: RiskSeverity =
+    status === "warning" ? "high" : status === "analyzing" ? "medium" : "low";
+  const evidence = agent.evidence.slice(0, 2).map((item) => item.label);
+
+  return (
+    <motion.article
+      className={`relative overflow-hidden rounded-md border bg-slate-950/72 p-4 shadow-[0_16px_60px_rgba(0,0,0,0.34)] backdrop-blur-xl ${severityBorder(statusSeverity)}`}
+      variants={sectionVariants}
+      whileHover={{ y: -3 }}
+    >
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <p className="font-mono text-[0.62rem] uppercase tracking-[0.16em] text-cyan-200">
+            {agent.displayName}
+          </p>
+          <h3 className="mt-1 text-base font-semibold leading-tight text-white">
+            {agent.title}
+          </h3>
+        </div>
+        <div className="shrink-0 text-right">
+          <p className="font-mono text-sm font-black text-white">
+            {Math.round(agent.confidence)}%
+          </p>
+          <p className={`mt-1 rounded border px-1.5 py-0.5 font-mono text-[0.55rem] uppercase tracking-[0.1em] ${severityBadge(statusSeverity)}`}>
+            {status}
+          </p>
+        </div>
+      </div>
+
+      <p className="mt-3 line-clamp-3 text-sm leading-6 text-slate-300">
+        {agent.message}
+      </p>
+
+      {agent.currentTask ? (
+        <p className="mt-3 line-clamp-1 border-l border-cyan-300/25 pl-3 text-xs leading-5 text-slate-400">
+          Task: {agent.currentTask}
+        </p>
+      ) : null}
+
+      {agent.disagreement ? (
+        <p className="mt-2 line-clamp-1 border-l border-orange-300/25 pl-3 text-xs leading-5 text-slate-400">
+          Challenge: {agent.disagreement}
+        </p>
+      ) : null}
+
+      {evidence.length > 0 ? (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {evidence.map((item) => (
+            <span
+              key={item}
+              className="rounded border border-cyan-300/18 bg-cyan-300/8 px-2 py-1 font-mono text-[0.62rem] uppercase tracking-[0.1em] text-cyan-200"
             >
-              <CircuitBoard className="h-9 w-9" />
-            </motion.div>
-          </div>
+              {item}
+            </span>
+          ))}
         </div>
-
-        <div className="grid gap-5">
-          <SignalPanel
-            icon={Network}
-            title="Detected services"
-            items={architecture.detectedServices}
-          />
-          <SignalPanel
-            icon={GitBranch}
-            title="Architecture drift"
-            items={architecture.architectureDrift}
-          />
-          <SignalPanel
-            icon={DatabaseZap}
-            title="Dependency concerns"
-            items={architecture.dependencyConcerns ?? architecture.dependencies}
-          />
-        </div>
-      </div>
-    </motion.section>
+      ) : null}
+    </motion.article>
   );
 }
 
-function ArchitectureNodeChip({
-  node,
-  index,
-  total,
-}: {
-  node: ArchitectureNode;
-  index: number;
-  total: number;
-}) {
-  const angle = (index / total) * Math.PI * 2 - Math.PI / 2;
-  const radius = 38;
-  const x = 50 + Math.cos(angle) * radius;
-  const y = 50 + Math.sin(angle) * radius;
-  const severity = normalizeSeverity(node.severity);
-
+function CompactTimelineSection({ events }: { events: TimelineEvent[] }) {
   return (
-    <motion.div
-      className={`absolute min-w-32 border bg-slate-950/82 px-3 py-3 text-left shadow-[0_18px_70px_rgba(0,0,0,0.46)] ${severityBorder(severity)}`}
-      style={{ left: `${x}%`, top: `${y}%`, transform: "translate(-50%, -50%)" }}
-      initial={{ opacity: 0, scale: 0.8 }}
-      whileInView={{ opacity: 1, scale: 1 }}
-      viewport={{ once: true }}
-      animate={{ y: [0, -8, 0] }}
-      transition={{
-        opacity: { duration: 0.4, delay: index * 0.08 },
-        scale: { duration: 0.4, delay: index * 0.08 },
-        y: { duration: 4 + index * 0.2, repeat: Infinity, ease: "easeInOut" },
-      }}
-    >
-      <p className="font-mono text-[0.62rem] uppercase tracking-[0.18em] text-slate-500">
-        {node.type}
-      </p>
-      <p className="mt-1 text-sm font-black uppercase text-white">{node.name}</p>
-      <p className="mt-1 font-mono text-[0.68rem] text-cyan-200">
-        {node.healthScore ?? 72}% integrity
-      </p>
-    </motion.div>
-  );
-}
+    <section className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+      <SectionHeader eyebrow="Timeline" title="Collapse sequence" meta={`${events.length} events`} />
 
-function SignalPanel({
-  icon: Icon,
-  title,
-  items,
-}: {
-  icon: LucideIcon;
-  title: string;
-  items: string[];
-}) {
-  const normalized = items.length > 0 ? items.slice(0, 5) : ["No confirmed signal yet"];
-
-  return (
-    <div className="border border-white/10 bg-slate-950/64 p-5 backdrop-blur-xl">
-      <div className="flex items-center gap-3">
-        <Icon className="h-5 w-5 text-cyan-300" />
-        <h3 className="text-sm font-black uppercase tracking-[0.16em] text-white">
-          {title}
-        </h3>
-      </div>
-      <div className="mt-4 space-y-2">
-        {normalized.map((item) => (
-          <div key={item} className="flex gap-3 border border-white/8 bg-slate-950/70 px-3 py-2">
-            <span className="mt-2 h-1.5 w-1.5 shrink-0 bg-cyan-300" />
-            <p className="text-xs leading-5 text-slate-300">{item}</p>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function FailureProjectionSection({ failures }: { failures: PredictedFailure[] }) {
-  return (
-    <section className="mx-auto w-full max-w-7xl px-4 py-16 sm:px-6 lg:px-10">
-      <SectionHeader
-        eyebrow="FAILURE PREDICTION ENGINE"
-        title="Future collapse vectors projected"
-        description="The risk model converts current forensic evidence into likely future breakpoints."
-        meta={`${failures.length} projections`}
-      />
-
-      <div className="mt-7 grid gap-5 lg:grid-cols-3">
-        {failures.map((failure, index) => {
-          const severity = normalizeSeverity(failure.severity);
+      <div className="mt-5 grid gap-3 md:grid-cols-2">
+        {events.map((event, index) => {
+          const severity = normalizeSeverity(event.severity);
 
           return (
             <motion.article
-              key={failure.id}
-              className={`relative overflow-hidden border bg-slate-950/70 p-5 shadow-[0_28px_100px_rgba(0,0,0,0.48)] backdrop-blur-2xl ${severityBorder(severity)}`}
-              initial={{ opacity: 0, y: 26 }}
+              key={event.id ?? `${event.timestamp}-${event.title}`}
+              className={`rounded-md border bg-slate-950/72 p-4 ${severityBorder(severity)}`}
+              initial={{ opacity: 0, y: 14 }}
               whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-80px" }}
-              transition={{ duration: 0.55, delay: index * 0.08 }}
-              whileHover={{ y: -6 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.42, delay: index * 0.05 }}
             >
-              <div className="absolute inset-0 bg-[linear-gradient(rgba(248,250,252,0.045)_1px,transparent_1px),linear-gradient(90deg,rgba(248,250,252,0.035)_1px,transparent_1px)] bg-[size:28px_28px] opacity-55" />
-              <div className="relative">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="font-mono text-[0.64rem] uppercase tracking-[0.22em] text-slate-500">
-                      {severity} projection
-                    </p>
-                    <h3 className="mt-2 text-xl font-black uppercase text-white">
-                      {failure.title}
-                    </h3>
-                  </div>
-                  <Zap className={severityText(severity)} />
-                </div>
-                <p className="mt-4 text-sm leading-6 text-slate-300">{failure.description}</p>
-                <div className="mt-5">
-                  <div className="mb-2 flex justify-between font-mono text-[0.68rem] uppercase tracking-[0.16em] text-slate-500">
-                    <span>probability</span>
-                    <span className={severityText(severity)}>{failure.probability}%</span>
-                  </div>
-                  <div className="h-1.5 bg-slate-900">
-                    <motion.div
-                      className="h-full bg-gradient-to-r from-cyan-300 via-orange-400 to-red-400"
-                      initial={{ width: 0 }}
-                      whileInView={{ width: `${failure.probability}%` }}
-                      viewport={{ once: true }}
-                      transition={{ duration: 0.9, delay: index * 0.08 }}
-                    />
-                  </div>
-                </div>
-                {failure.trigger ? (
-                  <p className="mt-4 border-l border-cyan-300/30 pl-3 font-mono text-[0.68rem] uppercase tracking-[0.12em] text-slate-400">
-                    trigger: {failure.trigger}
+              <div className="flex items-start gap-3">
+                <Clock3 className={`mt-0.5 h-4 w-4 shrink-0 ${severityText(severity)}`} />
+                <div className="min-w-0">
+                  <p className="font-mono text-[0.62rem] uppercase tracking-[0.16em] text-slate-500">
+                    {event.timestamp}
                   </p>
-                ) : null}
+                  <h3 className="mt-1 text-sm font-bold text-white">{event.title}</h3>
+                  <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-400">
+                    {event.description}
+                  </p>
+                </div>
               </div>
             </motion.article>
           );
@@ -544,31 +450,129 @@ function FailureProjectionSection({ failures }: { failures: PredictedFailure[] }
   );
 }
 
+function CompactVerdictSection({
+  verdict,
+  failures,
+}: {
+  verdict: ForensicVerdict;
+  failures: PredictedFailure[];
+}) {
+  const severity = normalizeSeverity(verdict.severity);
+  const risks = verdict.detectedRisks.slice(0, 3);
+  const headline = verdictHeadline(severity);
+
+  return (
+    <section className="mx-auto w-full max-w-6xl px-4 pb-16 pt-8 sm:px-6 lg:px-8">
+      <motion.div
+        className={`relative overflow-hidden rounded-md border bg-slate-950/76 p-5 shadow-[0_22px_90px_rgba(0,0,0,0.46)] backdrop-blur-2xl sm:p-6 ${severityBorder(severity)}`}
+        variants={sectionVariants}
+        initial="hidden"
+        whileInView="show"
+        viewport={{ once: true, margin: "-100px" }}
+      >
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="max-w-3xl">
+            <div className="flex items-center gap-2">
+              <FileWarning className={`h-5 w-5 ${severityText(severity)}`} />
+              <p className="font-mono text-xs uppercase tracking-[0.22em] text-cyan-200">
+                Final verdict
+              </p>
+            </div>
+            <h2 className="mt-3 text-2xl font-black uppercase leading-tight text-white sm:text-3xl">
+              {headline}
+            </h2>
+            <p className="mt-3 max-w-4xl text-sm leading-6 text-slate-300">
+              {compactSentence(verdict.verdict)}
+            </p>
+            <p className="mt-2 line-clamp-2 max-w-4xl text-xs leading-5 text-slate-400 sm:text-sm">
+              Root cause: {verdict.rootCause}
+            </p>
+          </div>
+
+          <div className={`shrink-0 rounded border px-3 py-2 font-mono text-xs font-bold uppercase ${severityBadge(severity)}`}>
+            {severity}
+          </div>
+        </div>
+
+        <div className="mt-5 grid gap-4 lg:grid-cols-2">
+          <SummaryList title="Top risks" items={risks} />
+          <SummaryList
+            title="Predicted failures"
+            items={failures.map((failure) => `${failure.title} (${failure.probability}%)`)}
+          />
+        </div>
+      </motion.div>
+    </section>
+  );
+}
+
+function verdictHeadline(severity: RiskSeverity) {
+  if (severity === "critical") {
+    return "Critical instability detected";
+  }
+
+  if (severity === "high") {
+    return "High-risk architecture detected";
+  }
+
+  if (severity === "medium") {
+    return "Moderate risk under review";
+  }
+
+  return "System currently stable";
+}
+
+function compactSentence(value: string) {
+  const cleaned = value.replace(/^GHOST TRACE VERDICT:\s*/i, "").trim();
+  const firstSentence = cleaned.match(/^.*?[.!?](?:\s|$)/)?.[0]?.trim();
+
+  if (!firstSentence) {
+    return cleaned.length > 180 ? `${cleaned.slice(0, 177)}...` : cleaned;
+  }
+
+  return firstSentence.length > 220 ? `${firstSentence.slice(0, 217)}...` : firstSentence;
+}
+
+function SummaryList({ title, items }: { title: string; items: string[] }) {
+  const normalized = items.length > 0 ? items : ["No critical signal detected"];
+
+  return (
+    <div className="rounded border border-white/10 bg-slate-950/58 p-4">
+      <h3 className="font-mono text-[0.68rem] uppercase tracking-[0.18em] text-slate-500">
+        {title}
+      </h3>
+      <div className="mt-3 space-y-2">
+        {normalized.slice(0, 3).map((item) => (
+          <div key={item} className="flex gap-2 text-sm leading-5 text-slate-300">
+            <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-cyan-300" />
+            <span className="line-clamp-2">{item}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function SectionHeader({
   eyebrow,
   title,
-  description,
   meta,
 }: {
   eyebrow: string;
   title: string;
-  description: string;
   meta: string;
 }) {
   return (
-    <div className="flex flex-col gap-4 border-y border-cyan-300/15 py-5 lg:flex-row lg:items-end lg:justify-between">
+    <div className="flex flex-col gap-3 border-y border-cyan-300/15 py-4 sm:flex-row sm:items-center sm:justify-between">
       <div>
-        <p className="font-mono text-xs font-black uppercase tracking-[0.3em] text-cyan-200">
+        <p className="font-mono text-[0.68rem] font-black uppercase tracking-[0.22em] text-cyan-200">
           {eyebrow}
         </p>
-        <h2 className="mt-2 text-3xl font-black uppercase leading-none text-white sm:text-5xl">
+        <h2 className="mt-1 text-2xl font-black uppercase leading-tight text-white sm:text-3xl">
           {title}
         </h2>
-        <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-400 sm:text-base">
-          {description}
-        </p>
       </div>
-      <div className="inline-flex items-center gap-2 border border-cyan-300/20 bg-cyan-300/8 px-3 py-2 font-mono text-xs uppercase tracking-[0.18em] text-cyan-200">
+      <div className="inline-flex w-fit items-center gap-2 rounded border border-cyan-300/20 bg-cyan-300/8 px-3 py-2 font-mono text-[0.68rem] uppercase tracking-[0.16em] text-cyan-200">
         <Activity className="h-4 w-4" />
         {meta}
       </div>
@@ -614,15 +618,6 @@ function buildRiskMeters(data: InvestigationControllerData): RiskMetric[] {
   );
 }
 
-function toUiTimelineEvent(event: TimelineEvent): UiTimelineEvent {
-  return {
-    timestamp: event.timestamp,
-    title: event.title,
-    severity: normalizeSeverity(event.severity),
-    description: event.description,
-  };
-}
-
 function toAgentCardStatus(
   agent: AgentData,
   loading: boolean,
@@ -636,36 +631,6 @@ function toAgentCardStatus(
   }
 
   return "active";
-}
-
-function fallbackArchitectureNodes(architecture: ArchitectureReport): ArchitectureNode[] {
-  return architecture.detectedServices.map((service, index) => ({
-    id: `fallback-node-${index + 1}`,
-    name: service,
-    type: service.toLowerCase().includes("auth")
-      ? "auth"
-      : service.toLowerCase().includes("api")
-        ? "api"
-        : service.toLowerCase().includes("queue")
-          ? "queue"
-          : service.toLowerCase().includes("data")
-            ? "database"
-            : "service",
-    severity: index === 0 ? architectureSeverity(architecture) : "medium",
-    healthScore: Math.max(38, 82 - index * 7),
-  }));
-}
-
-function architectureSeverity(architecture: ArchitectureReport): RiskSeverity {
-  if (architecture.suspiciousPatterns.length + architecture.duplicatedModules.length > 5) {
-    return "critical";
-  }
-
-  if (architecture.architectureDrift.length > 2) {
-    return "high";
-  }
-
-  return "medium";
 }
 
 function normalizeSeverity(severity?: string): RiskSeverity {
@@ -732,4 +697,36 @@ function severityText(severity: RiskSeverity) {
   }
 
   return "text-cyan-300";
+}
+
+function severityBadge(severity: RiskSeverity) {
+  if (severity === "critical") {
+    return "border-red-300/30 bg-red-300/10 text-red-200";
+  }
+
+  if (severity === "high") {
+    return "border-orange-300/30 bg-orange-300/10 text-orange-200";
+  }
+
+  if (severity === "medium") {
+    return "border-violet-300/30 bg-violet-300/10 text-violet-200";
+  }
+
+  return "border-cyan-300/30 bg-cyan-300/10 text-cyan-200";
+}
+
+function severityBar(severity: RiskSeverity) {
+  if (severity === "critical") {
+    return "bg-gradient-to-r from-red-300 via-red-400 to-orange-300";
+  }
+
+  if (severity === "high") {
+    return "bg-gradient-to-r from-orange-300 via-amber-300 to-red-300";
+  }
+
+  if (severity === "medium") {
+    return "bg-gradient-to-r from-blue-300 via-violet-300 to-cyan-300";
+  }
+
+  return "bg-gradient-to-r from-cyan-300 via-sky-300 to-blue-300";
 }
