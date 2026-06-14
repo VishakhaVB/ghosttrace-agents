@@ -1,1038 +1,735 @@
 "use client";
 
-import { motion } from "framer-motion";
-import type { Variants } from "framer-motion";
+import { AgentCard } from "@/components/AgentCard";
+import { RiskMeter } from "@/components/RiskMeter";
+import { Timeline, type TimelineEvent as UiTimelineEvent } from "@/components/Timeline";
+import {
+  UploadPanel,
+  type InvestigationPayload,
+} from "@/components/UploadPanel";
+import { VerdictPanel } from "@/components/VerdictPanel";
+import { useInvestigation, type InvestigationControllerData } from "@/hooks/useInvestigation";
+import { mockAnalyzeResponse } from "@/lib/mockData";
+import type {
+  AgentData,
+  ArchitectureNode,
+  ArchitectureReport,
+  PredictedFailure,
+  RiskMetric,
+  RiskSeverity,
+  TimelineEvent,
+} from "@/types";
+import { AnimatePresence, motion, type Variants } from "framer-motion";
 import {
   Activity,
   AlertTriangle,
-  ArrowUpRight,
-  Brain,
-  Cpu,
-  Database,
-  Eye,
+  BrainCircuit,
+  CircuitBoard,
+  DatabaseZap,
   GitBranch,
-  Gauge,
-  Lock,
+  Loader2,
   Network,
-  Radar,
   Radio,
-  Rocket,
-  Shield,
-  Terminal,
-  Upload,
+  Radar,
+  ShieldAlert,
   Zap,
   type LucideIcon,
 } from "lucide-react";
 
-type Metric = {
-  label: string;
-  value: string;
-  detail: string;
-  progress: number;
-  icon: LucideIcon;
-  tone: "cyan" | "violet" | "danger" | "blue";
+const fallbackData: InvestigationControllerData = {
+  ...mockAnalyzeResponse,
+  raw: mockAnalyzeResponse,
+  usedFallback: true,
+  generatedAt: "2026-06-14T10:34:12.000Z",
 };
 
-type Agent = {
-  name: string;
-  role: string;
-  status: string;
-  confidence: number;
-  icon: LucideIcon;
-  signal: string;
-  response: string;
-  tone: "cyan" | "violet" | "danger" | "blue" | "orange";
-};
-
-const metrics: Metric[] = [
-  {
-    label: "Risk Score",
-    value: "87",
-    detail: "Critical systemic exposure detected",
-    progress: 87,
-    icon: AlertTriangle,
-    tone: "danger",
-  },
-  {
-    label: "Stability Index",
-    value: "42",
-    detail: "Runtime resilience below mission threshold",
-    progress: 42,
-    icon: Gauge,
-    tone: "cyan",
-  },
-  {
-    label: "Architecture Integrity",
-    value: "61",
-    detail: "Fragmented service boundaries mapped",
-    progress: 61,
-    icon: Network,
-    tone: "violet",
-  },
-  {
-    label: "Failure Probability",
-    value: "73%",
-    detail: "Projected escalation across release windows",
-    progress: 73,
-    icon: Activity,
-    tone: "blue",
-  },
-];
-
-const timelineEvents = [
-  {
-    time: "00:03:12",
-    title: "Auth duplication",
-    detail:
-      "Parallel identity modules found issuing overlapping session authority.",
-    icon: Lock,
-  },
-  {
-    time: "00:08:44",
-    title: "Architecture drift",
-    detail:
-      "Service contracts diverged from documented topology after release 4.8.",
-    icon: GitBranch,
-  },
-  {
-    time: "00:12:06",
-    title: "Dependency instability",
-    detail:
-      "Transitive packages show brittle version pinning and unbounded upgrade paths.",
-    icon: Database,
-  },
-  {
-    time: "00:17:29",
-    title: "Missing validation",
-    detail:
-      "Input validation absent across three boundary layers and two queue consumers.",
-    icon: Shield,
-  },
-  {
-    time: "00:22:51",
-    title: "Scaling degradation",
-    detail:
-      "Traffic simulation predicts cascading queue saturation under peak load.",
-    icon: Zap,
-  },
-];
-
-const agents: Agent[] = [
-  {
-    name: "ARCHITECT",
-    role: "Topology reconstruction",
-    status: "Mapping dependency fault lines",
-    confidence: 94,
-    icon: Network,
-    signal: "NODEGRAPH_SYNC",
-    response:
-      "Core service boundaries are recoverable, but ownership is split across competing abstractions.",
-    tone: "cyan",
-  },
-  {
-    name: "FORENSIC ANALYST",
-    role: "Root-cause excavation",
-    status: "Correlating commits with incident drift",
-    confidence: 91,
-    icon: Eye,
-    signal: "EVIDENCE_LOCK",
-    response:
-      "Regression signature begins at the authentication adapter and propagates into billing retries.",
-    tone: "violet",
-  },
-  {
-    name: "SECURITY AGENT",
-    role: "Threat surface scan",
-    status: "Tracing validation gaps",
-    confidence: 88,
-    icon: Shield,
-    signal: "BOUNDARY_ALERT",
-    response:
-      "Privilege checks are present, but enforcement is inconsistent at internal API ingress points.",
-    tone: "danger",
-  },
-  {
-    name: "FAILURE PREDICTOR",
-    role: "Collapse simulation",
-    status: "Projecting service saturation",
-    confidence: 86,
-    icon: Brain,
-    signal: "SCENARIO_RUN",
-    response:
-      "A three-node latency spike can trigger retries fast enough to exhaust queue workers in 11 minutes.",
-    tone: "orange",
-  },
-  {
-    name: "TIMELINE RECONSTRUCTOR",
-    role: "Incident chronology",
-    status: "Rebuilding event sequence",
-    confidence: 97,
-    icon: Terminal,
-    signal: "TRACE_STITCH",
-    response:
-      "The collapse path is chronological, not random: drift, duplication, instability, then overload.",
-    tone: "blue",
-  },
-];
-
-const architectureNodes = [
-  { label: "AUTH", x: "18%", y: "28%", tone: "danger" },
-  { label: "API", x: "44%", y: "18%", tone: "cyan" },
-  { label: "BILLING", x: "71%", y: "31%", tone: "violet" },
-  { label: "QUEUE", x: "29%", y: "68%", tone: "blue" },
-  { label: "DATA", x: "61%", y: "72%", tone: "cyan" },
-];
-
-const toneStyles = {
-  cyan: {
-    text: "text-[#22D3EE]",
-    bg: "bg-[#22D3EE]",
-    softBg: "bg-[#22D3EE]/10",
-    border: "border-[#22D3EE]/35",
-    shadow: "shadow-[0_0_42px_rgba(34,211,238,0.22)]",
-    gradient: "from-[#22D3EE] to-[#3B82F6]",
-  },
-  blue: {
-    text: "text-[#3B82F6]",
-    bg: "bg-[#3B82F6]",
-    softBg: "bg-[#3B82F6]/10",
-    border: "border-[#3B82F6]/35",
-    shadow: "shadow-[0_0_42px_rgba(59,130,246,0.2)]",
-    gradient: "from-[#3B82F6] to-[#22D3EE]",
-  },
-  violet: {
-    text: "text-[#8B5CF6]",
-    bg: "bg-[#8B5CF6]",
-    softBg: "bg-[#8B5CF6]/10",
-    border: "border-[#8B5CF6]/35",
-    shadow: "shadow-[0_0_42px_rgba(139,92,246,0.22)]",
-    gradient: "from-[#8B5CF6] to-[#A855F7]",
-  },
-  danger: {
-    text: "text-[#EF4444]",
-    bg: "bg-[#EF4444]",
-    softBg: "bg-[#EF4444]/10",
-    border: "border-[#EF4444]/35",
-    shadow: "shadow-[0_0_42px_rgba(239,68,68,0.24)]",
-    gradient: "from-[#EF4444] to-[#F97316]",
-  },
-  orange: {
-    text: "text-[#F97316]",
-    bg: "bg-[#F97316]",
-    softBg: "bg-[#F97316]/10",
-    border: "border-[#F97316]/35",
-    shadow: "shadow-[0_0_42px_rgba(249,115,22,0.2)]",
-    gradient: "from-[#F97316] to-[#EF4444]",
-  },
-};
-
-const terminalLines = [
-  "ingesting repository topology",
-  "indexing 48,912 symbols",
-  "replaying failed deploy sequence",
-  "isolating duplicated auth authority",
-  "constructing collapse probability model",
-];
-
-const container: Variants = {
-  hidden: { opacity: 0 },
+const sectionVariants: Variants = {
+  hidden: { opacity: 0, y: 32 },
   show: {
     opacity: 1,
-    transition: { staggerChildren: 0.12, delayChildren: 0.12 },
+    y: 0,
+    transition: { duration: 0.72, ease: [0.22, 1, 0.36, 1] },
   },
-};
-
-const item: Variants = {
-  hidden: { opacity: 0, y: 28 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.7, ease: "easeOut" } },
 };
 
 export default function Home() {
+  const investigation = useInvestigation();
+  const activeData = investigation.data ?? fallbackData;
+  const architecture = activeData.architectureReport;
+  const metrics = buildRiskMeters(activeData);
+  const timeline = activeData.timeline.map(toUiTimelineEvent);
+  const verdict = activeData.verdict;
+
+  function handleLaunch(payload: InvestigationPayload) {
+    void investigation.startInvestigation({
+      githubUrl: payload.githubUrl,
+      file: payload.file,
+      metadata: {
+        source: payload.source,
+        launchedFrom: "ghost-trace-upload-panel",
+      },
+    });
+  }
+
   return (
-    <main className="min-h-screen overflow-hidden bg-[#050816] text-[#F8FAFC] selection:bg-[#22D3EE]/25 selection:text-white">
-      <AmbientField />
-      <HeroSection />
-      <SystemOverview />
-      <ArchitectureInvestigation />
-      <FailureTimeline />
-      <WarRoom />
-      <FinalVerdict />
+    <main className="min-h-screen overflow-hidden bg-[#050816] text-slate-100">
+      <HeroStatus
+        loading={investigation.loading}
+        progress={investigation.progress}
+        phase={investigation.phase}
+        status={investigation.status}
+        usedFallback={activeData.usedFallback}
+      />
+
+      <section className="relative mx-auto w-full max-w-7xl px-4 pb-12 sm:px-6 lg:px-10">
+        <UploadPanel onLaunch={handleLaunch} />
+        <InvestigationProgress
+          loading={investigation.loading}
+          progress={investigation.progress}
+          phase={investigation.phase}
+          error={investigation.error}
+        />
+      </section>
+
+      <motion.section
+        className="mx-auto grid w-full max-w-7xl gap-5 px-4 py-10 sm:px-6 lg:grid-cols-4 lg:px-10"
+        variants={sectionVariants}
+        initial="hidden"
+        whileInView="show"
+        viewport={{ once: true, margin: "-120px" }}
+      >
+        {metrics.map((metric) => (
+          <RiskMeter
+            key={metric.id}
+            score={metric.value}
+            label={metric.label}
+            severity={metric.severity}
+          />
+        ))}
+      </motion.section>
+
+      <WarRoomSection
+        agents={activeData.agents}
+        loading={investigation.loading}
+        requestId={activeData.requestId ?? "mock-investigation"}
+      />
+
+      <ArchitectureSection architecture={architecture} />
+
+      <Timeline events={timeline} />
+
+      <FailureProjectionSection failures={activeData.predictedFailures} />
+
+      <VerdictPanel
+        verdict={verdict.verdict}
+        rootCause={verdict.rootCause}
+        risks={verdict.detectedRisks}
+        predictedFailures={verdict.predictedFailures.map(
+          (failure) => `${failure.title}: ${failure.description}`,
+        )}
+        severity={verdict.severity}
+      />
     </main>
   );
 }
 
-function AmbientField() {
+function HeroStatus({
+  loading,
+  progress,
+  phase,
+  status,
+  usedFallback,
+}: {
+  loading: boolean;
+  progress: number;
+  phase: string;
+  status: string;
+  usedFallback: boolean;
+}) {
   return (
-    <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
+    <section className="relative isolate overflow-hidden px-4 pb-12 pt-10 sm:px-6 lg:px-10 lg:pt-16">
+      <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_50%_8%,rgba(34,211,238,0.2),transparent_34%),radial-gradient(circle_at_80%_34%,rgba(139,92,246,0.16),transparent_28%),radial-gradient(circle_at_12%_64%,rgba(248,113,113,0.1),transparent_26%)]" />
       <motion.div
-        className="absolute inset-0 opacity-[0.18]"
+        className="pointer-events-none absolute inset-0 -z-10 opacity-[0.16]"
         style={{
           backgroundImage:
-            "linear-gradient(rgba(34,211,238,0.22) 1px, transparent 1px), linear-gradient(90deg, rgba(139,92,246,0.18) 1px, transparent 1px)",
-          backgroundSize: "64px 64px",
+            "linear-gradient(rgba(34,211,238,0.24) 1px, transparent 1px), linear-gradient(90deg, rgba(139,92,246,0.16) 1px, transparent 1px)",
+          backgroundSize: "72px 72px",
         }}
-        animate={{ backgroundPosition: ["0px 0px", "64px 64px"] }}
-        transition={{ duration: 18, repeat: Infinity, ease: "linear" }}
+        animate={{ backgroundPosition: ["0px 0px", "72px 72px"] }}
+        transition={{ duration: 24, repeat: Infinity, ease: "linear" }}
       />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(34,211,238,0.22),transparent_34%),radial-gradient(circle_at_82%_18%,rgba(139,92,246,0.18),transparent_28%),radial-gradient(circle_at_14%_72%,rgba(59,130,246,0.15),transparent_32%)]" />
-      <motion.div
-        className="absolute left-0 top-0 h-28 w-full bg-gradient-to-b from-[#22D3EE]/10 to-transparent blur-xl"
-        animate={{ y: ["-20%", "92vh", "-20%"], opacity: [0.08, 0.22, 0.08] }}
-        transition={{ duration: 9, repeat: Infinity, ease: "easeInOut" }}
-      />
-      <div
-        className="absolute inset-0 opacity-[0.07]"
-        style={{
-          backgroundImage:
-            "linear-gradient(to bottom, transparent 0, transparent 6px, rgba(248,250,252,0.32) 7px)",
-          backgroundSize: "100% 8px",
-        }}
-      />
-      {Array.from({ length: 24 }).map((_, index) => (
-        <motion.span
-          key={index}
-          className="absolute h-1 w-1 rounded-full bg-[#22D3EE] shadow-[0_0_18px_rgba(34,211,238,0.9)]"
-          style={{
-            left: `${(index * 37) % 100}%`,
-            top: `${(index * 19) % 100}%`,
-          }}
-          animate={{
-            y: [0, -24, 0],
-            opacity: [0.12, 0.75, 0.12],
-            scale: [1, 1.8, 1],
-          }}
-          transition={{
-            duration: 4 + (index % 5),
-            repeat: Infinity,
-            delay: index * 0.18,
-            ease: "easeInOut",
-          }}
-        />
-      ))}
-    </div>
-  );
-}
 
-function HeroSection() {
-  return (
-    <section className="relative z-10 min-h-screen px-5 py-8 sm:px-8 lg:px-12">
-      <div className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-7xl flex-col justify-between">
-        <motion.nav
-          className="flex items-center justify-between rounded-lg border border-[rgba(148,163,184,0.15)] bg-[rgba(15,23,42,0.65)] px-4 py-3 shadow-[0_24px_90px_rgba(0,0,0,0.35)] backdrop-blur-2xl"
-          initial={{ opacity: 0, y: -18 }}
+      <div className="mx-auto grid max-w-7xl gap-8 border-b border-cyan-300/15 pb-10 lg:grid-cols-[minmax(0,1fr)_420px] lg:items-end">
+        <motion.div
+          initial={{ opacity: 0, y: 26 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, ease: "easeOut" }}
+          transition={{ duration: 0.72, ease: [0.22, 1, 0.36, 1] }}
         >
-          <div className="flex items-center gap-3">
-            <motion.div
-              className="grid h-10 w-10 place-items-center rounded-md border border-[#22D3EE]/30 bg-[#0B1020] shadow-[0_0_32px_rgba(34,211,238,0.25)]"
-              animate={{ rotate: [0, 2, -2, 0] }}
-              transition={{ duration: 4, repeat: Infinity }}
-            >
-              <Radar className="h-5 w-5 text-[#22D3EE]" />
-            </motion.div>
-            <div>
-              <p className="text-sm font-semibold tracking-[0.34em] text-[#F8FAFC]">
-                GHOST TRACE
-              </p>
-              <p className="text-xs text-[#64748B]">Forensic intelligence mesh</p>
-            </div>
+          <div className="inline-flex items-center gap-3 border border-cyan-300/20 bg-cyan-300/8 px-4 py-2 font-mono text-xs uppercase tracking-[0.24em] text-cyan-200">
+            <motion.span
+              className="h-2 w-2 bg-emerald-300 shadow-[0_0_18px_rgba(52,211,153,0.9)]"
+              animate={{ scale: [1, 1.8, 1], opacity: [0.5, 1, 0.5] }}
+              transition={{ duration: 1.45, repeat: Infinity }}
+            />
+            AI forensic intelligence platform
           </div>
-          <div className="hidden items-center gap-5 text-xs uppercase tracking-[0.24em] text-[#94A3B8] md:flex">
-            <StatusPill label="Core online" tone="cyan" />
-            <StatusPill label="Trace active" tone="violet" />
-            <StatusPill label="Risk high" tone="danger" />
-          </div>
-        </motion.nav>
+          <h1 className="mt-6 max-w-5xl text-5xl font-black uppercase leading-none tracking-normal text-white sm:text-7xl lg:text-8xl">
+            Ghost Trace
+          </h1>
+          <p className="mt-5 max-w-3xl text-base leading-8 text-slate-300 sm:text-lg">
+            A cinematic multi-agent war room that ingests repository evidence,
+            reconstructs engineering collapse, predicts failure cascades, and
+            seals an AI forensic verdict.
+          </p>
+        </motion.div>
 
-        <div className="grid items-center gap-10 py-16 lg:grid-cols-[1.08fr_0.92fr] lg:py-20">
-          <motion.div
-            variants={container}
-            initial="hidden"
-            animate="show"
-            className="max-w-5xl"
-          >
-            <motion.div
-              variants={item}
-              className="mb-6 inline-flex items-center gap-3 rounded-full border border-[#22D3EE]/25 bg-[#22D3EE]/8 px-4 py-2 text-xs font-medium uppercase tracking-[0.32em] text-[#22D3EE] shadow-[0_0_32px_rgba(34,211,238,0.16)]"
-            >
-              <Radio className="h-4 w-4" />
-              AI Forensic Intelligence for Software Systems
-            </motion.div>
-            <motion.h1
-              variants={item}
-              className="text-balance text-6xl font-black leading-[0.82] tracking-normal text-[#F8FAFC] sm:text-8xl lg:text-[8.7rem]"
-            >
-              GHOST
-              <span className="block bg-gradient-to-r from-[#22D3EE] via-[#3B82F6] to-[#A855F7] bg-clip-text text-transparent drop-shadow-[0_0_34px_rgba(34,211,238,0.28)]">
-                TRACE
-              </span>
-            </motion.h1>
-            <motion.p
-              variants={item}
-              className="mt-7 max-w-2xl text-lg leading-8 text-[#94A3B8] sm:text-xl"
-            >
-              A cinematic AI investigation system that reconstructs hidden
-              architecture, debates evidence, and predicts software collapse
-              before production feels the impact.
-            </motion.p>
-            <motion.div
-              variants={item}
-              className="mt-9 flex flex-col gap-4 sm:flex-row"
-            >
-              <PrimaryButton icon={Upload}>Upload Repository</PrimaryButton>
-              <SecondaryButton icon={Rocket}>Launch Investigation</SecondaryButton>
-            </motion.div>
-            <motion.div
-              variants={item}
-              className="mt-10 grid gap-3 text-sm text-[#94A3B8] sm:grid-cols-3"
-            >
-              {["Symbolic trace engine", "Autonomous agent debate", "Failure projection"].map(
-                (label) => (
-                  <div
-                    key={label}
-                    className="flex items-center gap-3 rounded-lg border border-[rgba(148,163,184,0.15)] bg-[rgba(17,24,39,0.72)] px-4 py-3 backdrop-blur-xl"
-                  >
-                    <span className="h-2 w-2 rounded-full bg-[#22D3EE] shadow-[0_0_18px_rgba(34,211,238,0.8)]" />
-                    {label}
-                  </div>
-                ),
+        <motion.aside
+          className="relative overflow-hidden border border-cyan-300/20 bg-slate-950/68 p-5 shadow-[0_30px_120px_rgba(0,0,0,0.54)] backdrop-blur-2xl"
+          initial={{ opacity: 0, scale: 0.96, y: 24 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          transition={{ duration: 0.78, delay: 0.12, ease: [0.22, 1, 0.36, 1] }}
+        >
+          <div className="absolute inset-0 bg-[linear-gradient(rgba(34,211,238,0.06)_1px,transparent_1px),linear-gradient(90deg,rgba(139,92,246,0.045)_1px,transparent_1px)] bg-[size:28px_28px] opacity-60" />
+          <div className="relative">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="font-mono text-[0.68rem] uppercase tracking-[0.24em] text-slate-500">
+                  command core
+                </p>
+                <p className="mt-2 font-mono text-sm font-black uppercase text-cyan-200">
+                  {status.replaceAll("_", " ")}
+                </p>
+              </div>
+              {loading ? (
+                <Loader2 className="h-5 w-5 animate-spin text-cyan-300" />
+              ) : (
+                <Radio className="h-5 w-5 text-cyan-300" />
               )}
-            </motion.div>
-          </motion.div>
+            </div>
 
-          <motion.div
-            className="relative mx-auto w-full max-w-xl"
-            initial={{ opacity: 0, scale: 0.94, y: 30 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            transition={{ duration: 0.9, delay: 0.25, ease: "easeOut" }}
-          >
-            <div className="absolute -inset-10 rounded-full bg-[#22D3EE]/10 blur-3xl" />
-            <div className="relative overflow-hidden rounded-lg border border-[rgba(148,163,184,0.15)] bg-[rgba(15,23,42,0.65)] p-5 shadow-[0_40px_140px_rgba(0,0,0,0.55)] backdrop-blur-2xl">
-              <div className="mb-5 flex items-center justify-between">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.28em] text-[#64748B]">
-                    Mission control
-                  </p>
-                  <p className="mt-1 font-mono text-sm text-[#22D3EE]">
-                    TRACE_SESSION_09F-ACTIVE
-                  </p>
-                </div>
-                <motion.div
-                  className="rounded-full border border-[#EF4444]/30 bg-[#EF4444]/10 px-3 py-1 text-xs font-semibold text-[#EF4444]"
-                  animate={{ boxShadow: ["0 0 0 rgba(239,68,68,0)", "0 0 28px rgba(239,68,68,0.35)", "0 0 0 rgba(239,68,68,0)"] }}
-                  transition={{ duration: 2.1, repeat: Infinity }}
-                >
-                  ANOMALY
-                </motion.div>
+            <div className="mt-5">
+              <div className="mb-2 flex justify-between font-mono text-[0.68rem] uppercase tracking-[0.18em] text-slate-500">
+                <span>{phase.replaceAll("_", " ")}</span>
+                <span className="text-cyan-200">{Math.round(progress)}%</span>
               </div>
-              <div className="grid gap-3">
-                {terminalLines.map((line, index) => (
-                  <motion.div
-                    key={line}
-                    className="flex items-center gap-3 rounded-md border border-[rgba(148,163,184,0.15)] bg-[#0B1020]/70 px-4 py-3 font-mono text-sm text-[#94A3B8]"
-                    initial={{ opacity: 0, x: 16 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.6 + index * 0.18, duration: 0.45 }}
-                  >
-                    <Terminal className="h-4 w-4 text-[#22D3EE]" />
-                    <span className="text-[#64748B]">&gt;</span>
-                    <span>{line}</span>
-                    <motion.span
-                      className="ml-auto h-2 w-9 rounded-full bg-gradient-to-r from-[#22D3EE] to-transparent"
-                      animate={{ opacity: [0.2, 1, 0.2] }}
-                      transition={{ duration: 1.3, repeat: Infinity, delay: index * 0.1 }}
-                    />
-                  </motion.div>
-                ))}
-              </div>
-              <div className="mt-5 h-40 overflow-hidden rounded-md border border-[#22D3EE]/15 bg-[#050816]/80 p-4">
+              <div className="h-2 overflow-hidden bg-slate-900">
                 <motion.div
-                  className="h-full rounded-sm"
-                  style={{
-                    background:
-                      "linear-gradient(90deg, transparent 0 8%, rgba(34,211,238,0.35) 8% 9%, transparent 9% 20%, rgba(139,92,246,0.3) 20% 21%, transparent 21% 100%)",
-                    backgroundSize: "46px 100%",
-                  }}
-                  animate={{ backgroundPositionX: ["0px", "460px"] }}
-                  transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
+                  className="h-full bg-gradient-to-r from-cyan-300 via-blue-400 to-violet-400"
+                  animate={{ width: `${progress}%` }}
+                  transition={{ duration: 0.45, ease: "easeOut" }}
                 />
               </div>
             </div>
-          </motion.div>
-        </div>
+
+            <div className="mt-5 grid grid-cols-3 gap-3">
+              <HeroTile icon={Radar} label="scan" value={loading ? "LIVE" : "READY"} />
+              <HeroTile icon={BrainCircuit} label="agents" value="05" />
+              <HeroTile icon={ShieldAlert} label="fallback" value={usedFallback ? "ARMED" : "OFF"} />
+            </div>
+          </div>
+        </motion.aside>
       </div>
     </section>
   );
 }
 
-function SystemOverview() {
+function HeroTile({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: LucideIcon;
+  label: string;
+  value: string;
+}) {
   return (
-    <SectionShell
-      kicker="System overview"
-      title="The platform reads the organism, not just the logs."
-      copy="Ghost Trace scores the software system as a living operational body: risk, resilience, architecture integrity, and failure pressure are evaluated together."
-    >
+    <div className="border border-white/10 bg-slate-950/60 p-3">
+      <Icon className="h-4 w-4 text-cyan-300" />
+      <p className="mt-3 font-mono text-[0.6rem] uppercase tracking-[0.18em] text-slate-500">
+        {label}
+      </p>
+      <p className="mt-1 font-mono text-xs font-bold text-white">{value}</p>
+    </div>
+  );
+}
+
+function InvestigationProgress({
+  loading,
+  progress,
+  phase,
+  error,
+}: {
+  loading: boolean;
+  progress: number;
+  phase: string;
+  error: string | null;
+}) {
+  return (
+    <AnimatePresence>
+      {(loading || error) && (
+        <motion.div
+          className="mt-5 overflow-hidden border border-cyan-300/18 bg-slate-950/72 p-4 backdrop-blur-xl"
+          initial={{ opacity: 0, y: -12 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -12 }}
+        >
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              {loading ? (
+                <Loader2 className="h-5 w-5 animate-spin text-cyan-300" />
+              ) : (
+                <AlertTriangle className="h-5 w-5 text-amber-300" />
+              )}
+              <div>
+                <p className="font-mono text-xs uppercase tracking-[0.22em] text-cyan-200">
+                  {phase.replaceAll("_", " ")}
+                </p>
+                <p className="mt-1 text-sm text-slate-400">
+                  {error ?? "AI agents are reconstructing the collapse timeline."}
+                </p>
+              </div>
+            </div>
+            <p className="font-mono text-sm font-bold text-white">{Math.round(progress)}%</p>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
+function WarRoomSection({
+  agents,
+  loading,
+  requestId,
+}: {
+  agents: AgentData[];
+  loading: boolean;
+  requestId: string;
+}) {
+  return (
+    <section className="relative mx-auto w-full max-w-7xl px-4 py-16 sm:px-6 lg:px-10">
+      <SectionHeader
+        eyebrow="LIVE AI WAR ROOM"
+        title="Agents debating repository evidence"
+        description="Each specialist receives the same reconstructed intelligence and surfaces a competing slice of the collapse story."
+        meta={requestId}
+      />
+
       <motion.div
-        variants={container}
+        className="mt-7 grid gap-5 lg:grid-cols-5"
+        variants={{
+          hidden: { opacity: 0 },
+          show: { opacity: 1, transition: { staggerChildren: 0.08 } },
+        }}
         initial="hidden"
         whileInView="show"
         viewport={{ once: true, margin: "-120px" }}
-        className="grid gap-5 md:grid-cols-2 xl:grid-cols-4"
       >
-        {metrics.map((metric) => (
-          <MetricCard key={metric.label} metric={metric} />
+        {agents.map((agent) => (
+          <AgentCard
+            key={agent.id}
+            role={agent.displayName}
+            message={agent.message}
+            confidence={agent.confidence}
+            status={toAgentCardStatus(agent, loading)}
+            evidence={agent.evidence.map((item) => item.label)}
+          />
         ))}
       </motion.div>
-    </SectionShell>
+    </section>
   );
 }
 
-function MetricCard({ metric }: { metric: Metric }) {
-  const Icon = metric.icon;
-  const tone = toneStyles[metric.tone];
+function ArchitectureSection({ architecture }: { architecture: ArchitectureReport }) {
+  const nodes = architecture.nodes.length > 0 ? architecture.nodes : fallbackArchitectureNodes(architecture);
 
   return (
-    <motion.article
-      variants={item}
-      whileHover={{ y: -8, scale: 1.015 }}
-      className={`group relative overflow-hidden rounded-lg border ${tone.border} bg-[rgba(15,23,42,0.65)] p-5 shadow-[0_28px_90px_rgba(0,0,0,0.32)] backdrop-blur-2xl transition-shadow duration-300 ${tone.shadow}`}
+    <motion.section
+      className="relative mx-auto w-full max-w-7xl px-4 py-16 sm:px-6 lg:px-10"
+      variants={sectionVariants}
+      initial="hidden"
+      whileInView="show"
+      viewport={{ once: true, margin: "-120px" }}
     >
-      <div className={`absolute -right-12 -top-12 h-32 w-32 rounded-full ${tone.softBg} blur-3xl transition-opacity duration-300 group-hover:opacity-100`} />
-      <div className="relative flex items-start justify-between">
-        <div className={`grid h-12 w-12 place-items-center rounded-md border ${tone.border} bg-[#0B1020]`}>
-          <Icon className={`h-6 w-6 ${tone.text}`} />
-        </div>
-        <motion.span
-          className={`h-3 w-3 rounded-full ${tone.bg} shadow-[0_0_18px_currentColor]`}
-          animate={{ scale: [1, 1.55, 1], opacity: [0.55, 1, 0.55] }}
-          transition={{ duration: 1.8, repeat: Infinity }}
-        />
-      </div>
-      <p className="mt-8 text-sm uppercase tracking-[0.24em] text-[#64748B]">
-        {metric.label}
-      </p>
-      <div className="mt-3 flex items-end gap-2">
-        <span className="text-5xl font-black tracking-normal text-[#F8FAFC]">
-          {metric.value}
-        </span>
-        <span className="pb-2 text-sm text-[#94A3B8]">/ 100</span>
-      </div>
-      <p className="mt-3 min-h-12 text-sm leading-6 text-[#94A3B8]">
-        {metric.detail}
-      </p>
-      <div className="mt-6 h-2 overflow-hidden rounded-full bg-[#111827]">
-        <motion.div
-          className={`h-full rounded-full bg-gradient-to-r ${tone.gradient}`}
-          initial={{ width: 0 }}
-          whileInView={{ width: `${metric.progress}%` }}
-          viewport={{ once: true }}
-          transition={{ duration: 1.2, ease: "easeOut" }}
-        />
-      </div>
-    </motion.article>
-  );
-}
-
-function ArchitectureInvestigation() {
-  return (
-    <SectionShell
-      kicker="Architecture investigation"
-      title="AI reconstructs the infrastructure hiding under drift."
-      copy="A live topology pass links modules, runtime pressure, ownership cracks, and dependency vectors into one forensic map."
-    >
-      <motion.div
-        className="relative overflow-hidden rounded-lg border border-[rgba(148,163,184,0.15)] bg-[rgba(17,24,39,0.72)] p-5 shadow-[0_40px_140px_rgba(0,0,0,0.48)] backdrop-blur-2xl lg:p-8"
-        initial={{ opacity: 0, y: 34 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true, margin: "-120px" }}
-        transition={{ duration: 0.8, ease: "easeOut" }}
-      >
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_38%_42%,rgba(34,211,238,0.15),transparent_25%),radial-gradient(circle_at_64%_56%,rgba(139,92,246,0.13),transparent_28%)]" />
-        <div className="relative grid gap-8 lg:grid-cols-[1fr_320px]">
-          <div className="relative min-h-[460px] overflow-hidden rounded-lg border border-[#22D3EE]/15 bg-[#050816]/70">
-            <motion.div
-              className="absolute inset-0 opacity-30"
-              style={{
-                backgroundImage:
-                  "linear-gradient(rgba(148,163,184,0.2) 1px, transparent 1px), linear-gradient(90deg, rgba(148,163,184,0.16) 1px, transparent 1px)",
-                backgroundSize: "36px 36px",
-              }}
-              animate={{ backgroundPosition: ["0px 0px", "36px 36px"] }}
-              transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
-            />
-            <svg className="absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-              {[
-                ["18", "28", "44", "18"],
-                ["44", "18", "71", "31"],
-                ["18", "28", "29", "68"],
-                ["29", "68", "61", "72"],
-                ["71", "31", "61", "72"],
-                ["44", "18", "61", "72"],
-              ].map(([x1, y1, x2, y2], index) => (
-                <motion.line
-                  key={`${x1}-${y1}-${x2}-${y2}`}
-                  x1={x1}
-                  y1={y1}
-                  x2={x2}
-                  y2={y2}
-                  stroke={index % 2 ? "rgba(139,92,246,0.48)" : "rgba(34,211,238,0.55)"}
-                  strokeWidth="0.45"
-                  strokeDasharray="4 4"
-                  initial={{ pathLength: 0, opacity: 0 }}
-                  whileInView={{ pathLength: 1, opacity: 1 }}
-                  viewport={{ once: true }}
-                  transition={{ duration: 1.6, delay: index * 0.16, ease: "easeInOut" }}
-                />
-              ))}
-            </svg>
-            {architectureNodes.map((node, index) => {
-              const tone = toneStyles[node.tone as keyof typeof toneStyles];
-
-              return (
-                <motion.div
-                  key={node.label}
-                  className={`absolute grid h-24 w-24 place-items-center rounded-full border ${tone.border} bg-[#0B1020]/90 text-sm font-bold tracking-[0.18em] ${tone.text} shadow-[0_0_34px_rgba(34,211,238,0.12)] backdrop-blur-xl`}
-                  style={{ left: node.x, top: node.y, transform: "translate(-50%, -50%)" }}
-                  initial={{ opacity: 0, scale: 0.5 }}
-                  whileInView={{ opacity: 1, scale: 1 }}
-                  viewport={{ once: true }}
-                  transition={{ duration: 0.6, delay: 0.4 + index * 0.12 }}
-                  animate={{ y: [0, -8, 0] }}
-                >
-                  <motion.span
-                    className={`absolute inset-0 rounded-full border ${tone.border}`}
-                    animate={{ scale: [1, 1.35, 1], opacity: [0.45, 0, 0.45] }}
-                    transition={{ duration: 2.6, repeat: Infinity, delay: index * 0.25 }}
-                  />
-                  {node.label}
-                </motion.div>
-              );
-            })}
-          </div>
-          <div className="grid content-between gap-5">
-            {[
-              ["Topology variance", "23.7%", "Unauthorized module gravity detected"],
-              ["Hidden coupling", "14 links", "Cross-domain calls bypass intended adapters"],
-              ["Runtime pressure", "High", "Queue workers approaching saturation band"],
-            ].map(([label, value, detail], index) => (
-              <motion.div
-                key={label}
-                className="rounded-lg border border-[rgba(148,163,184,0.15)] bg-[rgba(15,23,42,0.65)] p-5 backdrop-blur-xl"
-                initial={{ opacity: 0, x: 24 }}
-                whileInView={{ opacity: 1, x: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.55, delay: index * 0.13 }}
-              >
-                <p className="text-xs uppercase tracking-[0.24em] text-[#64748B]">
-                  {label}
-                </p>
-                <p className="mt-3 text-3xl font-black text-[#F8FAFC]">{value}</p>
-                <p className="mt-2 text-sm leading-6 text-[#94A3B8]">{detail}</p>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </motion.div>
-    </SectionShell>
-  );
-}
-
-function FailureTimeline() {
-  return (
-    <SectionShell
-      kicker="Failure timeline"
-      title="The incident was not sudden. It left a trail."
-      copy="Ghost Trace aligns architectural symptoms into a time-coded collapse narrative for engineering review."
-    >
-      <div className="relative mx-auto max-w-4xl">
-        <div className="absolute left-5 top-0 h-full w-px bg-gradient-to-b from-[#22D3EE] via-[#8B5CF6] to-[#EF4444] md:left-1/2" />
-        {timelineEvents.map((event, index) => {
-          const Icon = event.icon;
-          const isRight = index % 2 === 1;
-
-          return (
-            <motion.article
-              key={event.title}
-              className={`relative mb-8 grid gap-5 md:grid-cols-2 ${isRight ? "" : "md:text-right"}`}
-              initial={{ opacity: 0, y: 42 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-100px" }}
-              transition={{ duration: 0.65, delay: index * 0.08 }}
-            >
-              <div className={`${isRight ? "md:col-start-2" : ""} pl-14 md:pl-0`}>
-                <div className="group relative overflow-hidden rounded-lg border border-[rgba(148,163,184,0.15)] bg-[rgba(15,23,42,0.65)] p-5 shadow-[0_28px_90px_rgba(0,0,0,0.3)] backdrop-blur-2xl">
-                  <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#22D3EE]/70 to-transparent opacity-70" />
-                  <div className={`flex items-center gap-3 ${isRight ? "" : "md:flex-row-reverse"}`}>
-                    <div className="grid h-11 w-11 shrink-0 place-items-center rounded-md border border-[#22D3EE]/25 bg-[#0B1020]">
-                      <Icon className="h-5 w-5 text-[#22D3EE]" />
-                    </div>
-                    <div>
-                      <p className="font-mono text-xs text-[#8B5CF6]">{event.time}</p>
-                      <h3 className="mt-1 text-xl font-bold text-[#F8FAFC]">
-                        {event.title}
-                      </h3>
-                    </div>
-                  </div>
-                  <p className="mt-4 text-sm leading-6 text-[#94A3B8]">
-                    {event.detail}
-                  </p>
-                </div>
-              </div>
-              <motion.div
-                className="absolute left-2.5 top-8 h-5 w-5 rounded-full border border-[#22D3EE] bg-[#050816] shadow-[0_0_24px_rgba(34,211,238,0.8)] md:left-1/2 md:-translate-x-1/2"
-                animate={{ scale: [1, 1.35, 1] }}
-                transition={{ duration: 2, repeat: Infinity, delay: index * 0.2 }}
-              />
-            </motion.article>
-          );
-        })}
-      </div>
-    </SectionShell>
-  );
-}
-
-function WarRoom() {
-  return (
-    <SectionShell
-      kicker="Live AI war room"
-      title="Five agents debate the collapse path in real time."
-      copy="The war room is an active forensic council: each agent contributes evidence, challenges assumptions, and synchronizes a final risk model."
-    >
-      <motion.div
-        className="relative overflow-hidden rounded-lg border border-[#22D3EE]/20 bg-[rgba(15,23,42,0.65)] p-4 shadow-[0_44px_150px_rgba(0,0,0,0.55)] backdrop-blur-2xl sm:p-6 lg:p-8"
-        initial={{ opacity: 0, y: 36 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true, margin: "-120px" }}
-        transition={{ duration: 0.85, ease: "easeOut" }}
-      >
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(34,211,238,0.14),transparent_28%),radial-gradient(circle_at_20%_20%,rgba(168,85,247,0.13),transparent_24%)]" />
-        <svg className="pointer-events-none absolute inset-0 h-full w-full opacity-60" viewBox="0 0 100 100" preserveAspectRatio="none">
-          {[
-            ["50", "50", "18", "24"],
-            ["50", "50", "82", "24"],
-            ["50", "50", "19", "76"],
-            ["50", "50", "82", "76"],
-            ["50", "50", "50", "18"],
-          ].map(([x1, y1, x2, y2], index) => (
-            <motion.line
-              key={`${x2}-${y2}`}
-              x1={x1}
-              y1={y1}
-              x2={x2}
-              y2={y2}
-              stroke={index === 2 ? "rgba(239,68,68,0.44)" : "rgba(34,211,238,0.42)"}
-              strokeWidth="0.28"
-              strokeDasharray="2 3"
-              animate={{ strokeDashoffset: [0, -20], opacity: [0.2, 0.9, 0.2] }}
-              transition={{ duration: 3.2 + index * 0.2, repeat: Infinity, ease: "linear" }}
-            />
-          ))}
-        </svg>
-
-        <div className="relative grid gap-5 lg:grid-cols-[1fr_1fr_1fr]">
-          <div className="space-y-5">
-            <AgentCard agent={agents[0]} index={0} />
-            <AgentCard agent={agents[2]} index={2} />
-          </div>
-          <div className="flex flex-col justify-center gap-5">
-            <CommandCore />
-            <AgentCard agent={agents[4]} index={4} />
-          </div>
-          <div className="space-y-5">
-            <AgentCard agent={agents[1]} index={1} />
-            <AgentCard agent={agents[3]} index={3} />
-          </div>
-        </div>
-      </motion.div>
-    </SectionShell>
-  );
-}
-
-function AgentCard({ agent, index }: { agent: Agent; index: number }) {
-  const Icon = agent.icon;
-  const tone = toneStyles[agent.tone];
-
-  return (
-    <motion.article
-      className={`relative overflow-hidden rounded-lg border ${tone.border} bg-[rgba(17,24,39,0.72)] p-5 shadow-[0_28px_90px_rgba(0,0,0,0.35)] backdrop-blur-2xl`}
-      initial={{ opacity: 0, y: 28, scale: 0.96 }}
-      whileInView={{ opacity: 1, y: 0, scale: 1 }}
-      whileHover={{ y: -6 }}
-      viewport={{ once: true }}
-      transition={{ duration: 0.65, delay: index * 0.08 }}
-    >
-      <motion.div
-        className={`absolute -right-16 -top-16 h-36 w-36 rounded-full ${tone.softBg} blur-3xl`}
-        animate={{ opacity: [0.25, 0.75, 0.25], scale: [1, 1.18, 1] }}
-        transition={{ duration: 3, repeat: Infinity, delay: index * 0.2 }}
+      <SectionHeader
+        eyebrow="ARCHITECTURE INTELLIGENCE"
+        title="Service topology reconstructed"
+        description={architecture.summary ?? "GHOST TRACE mapped system boundaries, dependency pressure, duplicated modules, and drift corridors."}
+        meta={`${architecture.detectedServices.length} services`}
       />
-      <div className="relative flex items-start justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className={`grid h-12 w-12 place-items-center rounded-md border ${tone.border} bg-[#0B1020]`}>
-            <Icon className={`h-6 w-6 ${tone.text}`} />
-          </div>
-          <div>
-            <h3 className="text-base font-black tracking-[0.18em] text-[#F8FAFC]">
-              {agent.name}
-            </h3>
-            <p className="mt-1 text-xs text-[#64748B]">{agent.role}</p>
+
+      <div className="mt-7 grid gap-5 lg:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.9fr)]">
+        <div className="relative min-h-[440px] overflow-hidden border border-cyan-300/18 bg-slate-950/64 p-5 shadow-[0_30px_130px_rgba(0,0,0,0.52)] backdrop-blur-2xl">
+          <div className="absolute inset-0 bg-[linear-gradient(rgba(34,211,238,0.055)_1px,transparent_1px),linear-gradient(90deg,rgba(139,92,246,0.045)_1px,transparent_1px)] bg-[size:42px_42px]" />
+          <div className="relative h-full min-h-[398px]">
+            {nodes.slice(0, 8).map((node, index) => (
+              <ArchitectureNodeChip
+                key={node.id}
+                node={node}
+                index={index}
+                total={Math.min(nodes.length, 8)}
+              />
+            ))}
+            <motion.div
+              className="absolute left-1/2 top-1/2 grid h-28 w-28 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border border-cyan-300/30 bg-cyan-300/10 text-cyan-200 shadow-[0_0_70px_rgba(34,211,238,0.2)]"
+              animate={{ rotate: 360, scale: [1, 1.04, 1] }}
+              transition={{
+                rotate: { duration: 18, repeat: Infinity, ease: "linear" },
+                scale: { duration: 3, repeat: Infinity },
+              }}
+            >
+              <CircuitBoard className="h-9 w-9" />
+            </motion.div>
           </div>
         </div>
-        <motion.span
-          className={`mt-1 h-3 w-3 rounded-full ${tone.bg}`}
-          animate={{ boxShadow: ["0 0 0 rgba(34,211,238,0)", "0 0 20px currentColor", "0 0 0 rgba(34,211,238,0)"] }}
-          transition={{ duration: 1.8, repeat: Infinity, delay: index * 0.1 }}
-        />
-      </div>
-      <div className="relative mt-5 rounded-md border border-[rgba(148,163,184,0.15)] bg-[#050816]/70 p-4">
-        <div className="flex items-center justify-between gap-4">
-          <p className={`font-mono text-xs ${tone.text}`}>{agent.signal}</p>
-          <p className="font-mono text-xs text-[#94A3B8]">
-            {agent.confidence}% CONF
-          </p>
-        </div>
-        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[#111827]">
-          <motion.div
-            className={`h-full rounded-full bg-gradient-to-r ${tone.gradient}`}
-            initial={{ width: 0 }}
-            whileInView={{ width: `${agent.confidence}%` }}
-            viewport={{ once: true }}
-            transition={{ duration: 1, delay: index * 0.1 }}
+
+        <div className="grid gap-5">
+          <SignalPanel
+            icon={Network}
+            title="Detected services"
+            items={architecture.detectedServices}
+          />
+          <SignalPanel
+            icon={GitBranch}
+            title="Architecture drift"
+            items={architecture.architectureDrift}
+          />
+          <SignalPanel
+            icon={DatabaseZap}
+            title="Dependency concerns"
+            items={architecture.dependencyConcerns ?? architecture.dependencies}
           />
         </div>
-        <p className="mt-4 text-xs uppercase tracking-[0.2em] text-[#64748B]">
-          {agent.status}
-        </p>
-        <p className="mt-3 min-h-20 text-sm leading-6 text-[#94A3B8]">
-          {agent.response}
-        </p>
-        <TypingIndicator tone={agent.tone} />
       </div>
-    </motion.article>
+    </motion.section>
   );
 }
 
-function CommandCore() {
+function ArchitectureNodeChip({
+  node,
+  index,
+  total,
+}: {
+  node: ArchitectureNode;
+  index: number;
+  total: number;
+}) {
+  const angle = (index / total) * Math.PI * 2 - Math.PI / 2;
+  const radius = 38;
+  const x = 50 + Math.cos(angle) * radius;
+  const y = 50 + Math.sin(angle) * radius;
+  const severity = normalizeSeverity(node.severity);
+
   return (
     <motion.div
-      className="relative mx-auto grid aspect-square w-full max-w-[300px] place-items-center rounded-full border border-[#22D3EE]/20 bg-[#050816]/70 shadow-[0_0_80px_rgba(34,211,238,0.18)] backdrop-blur-2xl"
-      animate={{ y: [0, -10, 0] }}
-      transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
+      className={`absolute min-w-32 border bg-slate-950/82 px-3 py-3 text-left shadow-[0_18px_70px_rgba(0,0,0,0.46)] ${severityBorder(severity)}`}
+      style={{ left: `${x}%`, top: `${y}%`, transform: "translate(-50%, -50%)" }}
+      initial={{ opacity: 0, scale: 0.8 }}
+      whileInView={{ opacity: 1, scale: 1 }}
+      viewport={{ once: true }}
+      animate={{ y: [0, -8, 0] }}
+      transition={{
+        opacity: { duration: 0.4, delay: index * 0.08 },
+        scale: { duration: 0.4, delay: index * 0.08 },
+        y: { duration: 4 + index * 0.2, repeat: Infinity, ease: "easeInOut" },
+      }}
     >
-      {[0, 1, 2].map((ring) => (
-        <motion.div
-          key={ring}
-          className="absolute rounded-full border border-[#22D3EE]/25"
-          style={{ inset: `${18 + ring * 15}%` }}
-          animate={{ rotate: ring % 2 ? -360 : 360, scale: [1, 1.04, 1] }}
-          transition={{
-            rotate: { duration: 12 + ring * 4, repeat: Infinity, ease: "linear" },
-            scale: { duration: 2.4, repeat: Infinity },
-          }}
-        />
-      ))}
-      <div className="relative text-center">
-        <Cpu className="mx-auto h-12 w-12 text-[#22D3EE]" />
-        <p className="mt-4 text-xs uppercase tracking-[0.34em] text-[#64748B]">
-          Ghost core
-        </p>
-        <p className="mt-2 text-3xl font-black text-[#F8FAFC]">LIVE</p>
-      </div>
+      <p className="font-mono text-[0.62rem] uppercase tracking-[0.18em] text-slate-500">
+        {node.type}
+      </p>
+      <p className="mt-1 text-sm font-black uppercase text-white">{node.name}</p>
+      <p className="mt-1 font-mono text-[0.68rem] text-cyan-200">
+        {node.healthScore ?? 72}% integrity
+      </p>
     </motion.div>
   );
 }
 
-function FinalVerdict() {
+function SignalPanel({
+  icon: Icon,
+  title,
+  items,
+}: {
+  icon: LucideIcon;
+  title: string;
+  items: string[];
+}) {
+  const normalized = items.length > 0 ? items.slice(0, 5) : ["No confirmed signal yet"];
+
   return (
-    <section className="relative z-10 px-5 py-24 sm:px-8 lg:px-12 lg:py-32">
-      <motion.div
-        className="mx-auto max-w-7xl overflow-hidden rounded-lg border border-[#EF4444]/30 bg-[rgba(17,24,39,0.72)] shadow-[0_40px_160px_rgba(239,68,68,0.16)] backdrop-blur-2xl"
-        initial={{ opacity: 0, y: 38 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true, margin: "-120px" }}
-        transition={{ duration: 0.85, ease: "easeOut" }}
-      >
-        <div className="relative p-6 sm:p-8 lg:p-10">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_0%,rgba(239,68,68,0.22),transparent_28%),radial-gradient(circle_at_85%_20%,rgba(249,115,22,0.15),transparent_24%)]" />
-          <motion.div
-            className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-transparent via-[#EF4444] to-transparent"
-            animate={{ opacity: [0.3, 1, 0.3] }}
-            transition={{ duration: 1.8, repeat: Infinity }}
-          />
-          <div className="relative grid gap-10 lg:grid-cols-[0.95fr_1.05fr]">
-            <div>
-              <div className="mb-6 inline-flex items-center gap-3 rounded-full border border-[#EF4444]/30 bg-[#EF4444]/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.28em] text-[#EF4444]">
-                <AlertTriangle className="h-4 w-4" />
-                Final forensic verdict
-              </div>
-              <h2 className="text-4xl font-black leading-tight tracking-normal text-[#F8FAFC] sm:text-5xl lg:text-6xl">
-                Engineering collapse is probable without structural intervention.
-              </h2>
-              <p className="mt-6 text-lg leading-8 text-[#94A3B8]">
-                Ghost Trace concludes the system is carrying accumulated
-                architectural debt across authentication, validation,
-                dependency stability, and scale behavior. The failure vector is
-                compounding, not isolated.
-              </p>
-            </div>
-            <div className="grid gap-4">
-              {[
-                ["Risk verdict", "SEV-1 / CRITICAL", "Immediate remediation required before next release train."],
-                ["Projected failure", "Retry storm + authorization conflict", "Likely path begins under elevated traffic and spreads through queue workers."],
-                ["Primary correction", "Consolidate trust boundaries", "Unify session authority and enforce validation at every ingress point."],
-              ].map(([label, value, detail], index) => (
-                <motion.div
-                  key={label}
-                  className="rounded-lg border border-[#EF4444]/20 bg-[#050816]/70 p-5"
-                  initial={{ opacity: 0, x: 26 }}
-                  whileInView={{ opacity: 1, x: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ duration: 0.55, delay: index * 0.12 }}
-                >
-                  <p className="text-xs uppercase tracking-[0.24em] text-[#F97316]">
-                    {label}
-                  </p>
-                  <p className="mt-3 text-2xl font-black text-[#F8FAFC]">{value}</p>
-                  <p className="mt-2 text-sm leading-6 text-[#94A3B8]">{detail}</p>
-                </motion.div>
-              ))}
-              <div className="grid grid-cols-3 gap-3">
-                {["Auth", "Data", "Scale"].map((label, index) => (
-                  <motion.div
-                    key={label}
-                    className="rounded-lg border border-[#EF4444]/25 bg-[#EF4444]/10 p-4 text-center"
-                    animate={{ boxShadow: ["0 0 0 rgba(239,68,68,0)", "0 0 24px rgba(239,68,68,0.2)", "0 0 0 rgba(239,68,68,0)"] }}
-                    transition={{ duration: 2.2, repeat: Infinity, delay: index * 0.25 }}
-                  >
-                    <p className="text-xs uppercase tracking-[0.18em] text-[#64748B]">
-                      {label}
-                    </p>
-                    <p className="mt-2 text-xl font-black text-[#EF4444]">HIGH</p>
-                  </motion.div>
-                ))}
-              </div>
-            </div>
+    <div className="border border-white/10 bg-slate-950/64 p-5 backdrop-blur-xl">
+      <div className="flex items-center gap-3">
+        <Icon className="h-5 w-5 text-cyan-300" />
+        <h3 className="text-sm font-black uppercase tracking-[0.16em] text-white">
+          {title}
+        </h3>
+      </div>
+      <div className="mt-4 space-y-2">
+        {normalized.map((item) => (
+          <div key={item} className="flex gap-3 border border-white/8 bg-slate-950/70 px-3 py-2">
+            <span className="mt-2 h-1.5 w-1.5 shrink-0 bg-cyan-300" />
+            <p className="text-xs leading-5 text-slate-300">{item}</p>
           </div>
-        </div>
-      </motion.div>
-    </section>
+        ))}
+      </div>
+    </div>
   );
 }
 
-function SectionShell({
-  kicker,
-  title,
-  copy,
-  children,
-}: {
-  kicker: string;
-  title: string;
-  copy: string;
-  children: React.ReactNode;
-}) {
+function FailureProjectionSection({ failures }: { failures: PredictedFailure[] }) {
   return (
-    <section className="relative z-10 px-5 py-20 sm:px-8 lg:px-12 lg:py-28">
-      <div className="mx-auto max-w-7xl">
-        <motion.div
-          className="mb-10 max-w-3xl"
-          initial={{ opacity: 0, y: 28 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-120px" }}
-          transition={{ duration: 0.7, ease: "easeOut" }}
-        >
-          <p className="mb-4 text-xs font-semibold uppercase tracking-[0.34em] text-[#22D3EE]">
-            {kicker}
-          </p>
-          <h2 className="text-3xl font-black leading-tight tracking-normal text-[#F8FAFC] sm:text-5xl">
-            {title}
-          </h2>
-          <p className="mt-5 text-base leading-7 text-[#94A3B8] sm:text-lg">
-            {copy}
-          </p>
-        </motion.div>
-        {children}
+    <section className="mx-auto w-full max-w-7xl px-4 py-16 sm:px-6 lg:px-10">
+      <SectionHeader
+        eyebrow="FAILURE PREDICTION ENGINE"
+        title="Future collapse vectors projected"
+        description="The risk model converts current forensic evidence into likely future breakpoints."
+        meta={`${failures.length} projections`}
+      />
+
+      <div className="mt-7 grid gap-5 lg:grid-cols-3">
+        {failures.map((failure, index) => {
+          const severity = normalizeSeverity(failure.severity);
+
+          return (
+            <motion.article
+              key={failure.id}
+              className={`relative overflow-hidden border bg-slate-950/70 p-5 shadow-[0_28px_100px_rgba(0,0,0,0.48)] backdrop-blur-2xl ${severityBorder(severity)}`}
+              initial={{ opacity: 0, y: 26 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-80px" }}
+              transition={{ duration: 0.55, delay: index * 0.08 }}
+              whileHover={{ y: -6 }}
+            >
+              <div className="absolute inset-0 bg-[linear-gradient(rgba(248,250,252,0.045)_1px,transparent_1px),linear-gradient(90deg,rgba(248,250,252,0.035)_1px,transparent_1px)] bg-[size:28px_28px] opacity-55" />
+              <div className="relative">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="font-mono text-[0.64rem] uppercase tracking-[0.22em] text-slate-500">
+                      {severity} projection
+                    </p>
+                    <h3 className="mt-2 text-xl font-black uppercase text-white">
+                      {failure.title}
+                    </h3>
+                  </div>
+                  <Zap className={severityText(severity)} />
+                </div>
+                <p className="mt-4 text-sm leading-6 text-slate-300">{failure.description}</p>
+                <div className="mt-5">
+                  <div className="mb-2 flex justify-between font-mono text-[0.68rem] uppercase tracking-[0.16em] text-slate-500">
+                    <span>probability</span>
+                    <span className={severityText(severity)}>{failure.probability}%</span>
+                  </div>
+                  <div className="h-1.5 bg-slate-900">
+                    <motion.div
+                      className="h-full bg-gradient-to-r from-cyan-300 via-orange-400 to-red-400"
+                      initial={{ width: 0 }}
+                      whileInView={{ width: `${failure.probability}%` }}
+                      viewport={{ once: true }}
+                      transition={{ duration: 0.9, delay: index * 0.08 }}
+                    />
+                  </div>
+                </div>
+                {failure.trigger ? (
+                  <p className="mt-4 border-l border-cyan-300/30 pl-3 font-mono text-[0.68rem] uppercase tracking-[0.12em] text-slate-400">
+                    trigger: {failure.trigger}
+                  </p>
+                ) : null}
+              </div>
+            </motion.article>
+          );
+        })}
       </div>
     </section>
   );
 }
 
-function StatusPill({
-  label,
-  tone,
+function SectionHeader({
+  eyebrow,
+  title,
+  description,
+  meta,
 }: {
-  label: string;
-  tone: keyof typeof toneStyles;
+  eyebrow: string;
+  title: string;
+  description: string;
+  meta: string;
 }) {
-  const style = toneStyles[tone];
-
   return (
-    <div className="flex items-center gap-2">
-      <motion.span
-        className={`h-2 w-2 rounded-full ${style.bg}`}
-        animate={{ scale: [1, 1.6, 1], opacity: [0.5, 1, 0.5] }}
-        transition={{ duration: 1.7, repeat: Infinity }}
-      />
-      {label}
+    <div className="flex flex-col gap-4 border-y border-cyan-300/15 py-5 lg:flex-row lg:items-end lg:justify-between">
+      <div>
+        <p className="font-mono text-xs font-black uppercase tracking-[0.3em] text-cyan-200">
+          {eyebrow}
+        </p>
+        <h2 className="mt-2 text-3xl font-black uppercase leading-none text-white sm:text-5xl">
+          {title}
+        </h2>
+        <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-400 sm:text-base">
+          {description}
+        </p>
+      </div>
+      <div className="inline-flex items-center gap-2 border border-cyan-300/20 bg-cyan-300/8 px-3 py-2 font-mono text-xs uppercase tracking-[0.18em] text-cyan-200">
+        <Activity className="h-4 w-4" />
+        {meta}
+      </div>
     </div>
   );
 }
 
-function PrimaryButton({
-  children,
-  icon: Icon,
-}: {
-  children: React.ReactNode;
-  icon: LucideIcon;
-}) {
-  return (
-    <motion.button
-      whileHover={{ y: -3, scale: 1.015 }}
-      whileTap={{ scale: 0.98 }}
-      className="group inline-flex min-h-14 items-center justify-center gap-3 rounded-md border border-[#22D3EE]/30 bg-gradient-to-r from-[#22D3EE] to-[#3B82F6] px-6 text-sm font-black uppercase tracking-[0.18em] text-[#050816] shadow-[0_0_40px_rgba(34,211,238,0.28)]"
-    >
-      <Icon className="h-5 w-5 transition-transform group-hover:-translate-y-0.5" />
-      {children}
-    </motion.button>
+function buildRiskMeters(data: InvestigationControllerData): RiskMetric[] {
+  const metrics = data.riskMetrics.metrics.length > 0 ? data.riskMetrics.metrics : [];
+  const required: RiskMetric[] = [
+    {
+      id: "risk-overall",
+      key: "risk_score",
+      label: "Risk Score",
+      value: data.riskMetrics.riskScore,
+      severity: data.riskMetrics.severity,
+    },
+    {
+      id: "risk-stability",
+      key: "stability_score",
+      label: "Stability Index",
+      value: data.riskMetrics.stabilityScore,
+      severity: scoreToSeverity(100 - data.riskMetrics.stabilityScore),
+    },
+    {
+      id: "risk-integrity",
+      key: "integrity_score",
+      label: "Architecture Integrity",
+      value: data.riskMetrics.integrityScore,
+      severity: scoreToSeverity(100 - data.riskMetrics.integrityScore),
+    },
+    {
+      id: "risk-failure",
+      key: "projected_failure_rate",
+      label: "Failure Probability",
+      value: data.riskMetrics.projectedFailureRate,
+      severity: scoreToSeverity(data.riskMetrics.projectedFailureRate),
+    },
+  ];
+
+  return required.map(
+    (fallback) => metrics.find((metric) => metric.key === fallback.key) ?? fallback,
   );
 }
 
-function SecondaryButton({
-  children,
-  icon: Icon,
-}: {
-  children: React.ReactNode;
-  icon: LucideIcon;
-}) {
-  return (
-    <motion.button
-      whileHover={{ y: -3, scale: 1.015 }}
-      whileTap={{ scale: 0.98 }}
-      className="group inline-flex min-h-14 items-center justify-center gap-3 rounded-md border border-[#8B5CF6]/35 bg-[rgba(15,23,42,0.65)] px-6 text-sm font-black uppercase tracking-[0.18em] text-[#F8FAFC] shadow-[0_0_36px_rgba(139,92,246,0.16)] backdrop-blur-xl"
-    >
-      <Icon className="h-5 w-5 text-[#8B5CF6] transition-transform group-hover:translate-x-0.5" />
-      {children}
-      <ArrowUpRight className="h-4 w-4 text-[#64748B]" />
-    </motion.button>
-  );
+function toUiTimelineEvent(event: TimelineEvent): UiTimelineEvent {
+  return {
+    timestamp: event.timestamp,
+    title: event.title,
+    severity: normalizeSeverity(event.severity),
+    description: event.description,
+  };
 }
 
-function TypingIndicator({ tone }: { tone: keyof typeof toneStyles }) {
-  const style = toneStyles[tone];
+function toAgentCardStatus(
+  agent: AgentData,
+  loading: boolean,
+): "active" | "analyzing" | "warning" {
+  if (agent.status === "warning" || agent.status === "escalating" || agent.status === "disputing") {
+    return "warning";
+  }
 
-  return (
-    <div className="mt-4 flex items-center gap-2">
-      <span className="font-mono text-xs uppercase tracking-[0.2em] text-[#64748B]">
-        streaming
-      </span>
-      {[0, 1, 2].map((dot) => (
-        <motion.span
-          key={dot}
-          className={`h-1.5 w-1.5 rounded-full ${style.bg}`}
-          animate={{ opacity: [0.2, 1, 0.2], y: [0, -3, 0] }}
-          transition={{ duration: 0.9, repeat: Infinity, delay: dot * 0.15 }}
-        />
-      ))}
-    </div>
-  );
+  if (loading || agent.status === "analyzing") {
+    return "analyzing";
+  }
+
+  return "active";
+}
+
+function fallbackArchitectureNodes(architecture: ArchitectureReport): ArchitectureNode[] {
+  return architecture.detectedServices.map((service, index) => ({
+    id: `fallback-node-${index + 1}`,
+    name: service,
+    type: service.toLowerCase().includes("auth")
+      ? "auth"
+      : service.toLowerCase().includes("api")
+        ? "api"
+        : service.toLowerCase().includes("queue")
+          ? "queue"
+          : service.toLowerCase().includes("data")
+            ? "database"
+            : "service",
+    severity: index === 0 ? architectureSeverity(architecture) : "medium",
+    healthScore: Math.max(38, 82 - index * 7),
+  }));
+}
+
+function architectureSeverity(architecture: ArchitectureReport): RiskSeverity {
+  if (architecture.suspiciousPatterns.length + architecture.duplicatedModules.length > 5) {
+    return "critical";
+  }
+
+  if (architecture.architectureDrift.length > 2) {
+    return "high";
+  }
+
+  return "medium";
+}
+
+function normalizeSeverity(severity?: string): RiskSeverity {
+  const normalized = severity?.toLowerCase();
+
+  if (normalized === "critical") {
+    return "critical";
+  }
+
+  if (normalized === "high") {
+    return "high";
+  }
+
+  if (normalized === "moderate" || normalized === "medium") {
+    return "medium";
+  }
+
+  return "low";
+}
+
+function scoreToSeverity(score: number): RiskSeverity {
+  if (score >= 85) {
+    return "critical";
+  }
+
+  if (score >= 68) {
+    return "high";
+  }
+
+  if (score >= 42) {
+    return "medium";
+  }
+
+  return "low";
+}
+
+function severityBorder(severity: RiskSeverity) {
+  if (severity === "critical") {
+    return "border-red-300/42";
+  }
+
+  if (severity === "high") {
+    return "border-orange-300/38";
+  }
+
+  if (severity === "medium") {
+    return "border-violet-300/32";
+  }
+
+  return "border-cyan-300/26";
+}
+
+function severityText(severity: RiskSeverity) {
+  if (severity === "critical") {
+    return "text-red-300";
+  }
+
+  if (severity === "high") {
+    return "text-orange-300";
+  }
+
+  if (severity === "medium") {
+    return "text-violet-300";
+  }
+
+  return "text-cyan-300";
 }
