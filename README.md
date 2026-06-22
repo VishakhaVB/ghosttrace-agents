@@ -9,7 +9,7 @@ Unlike traditional static analyzers that generate warnings and metrics, GhostTra
 The result is a forensic-style investigation report that identifies architectural decay, technical debt, risky engineering decisions, future failure points, and actionable recovery strategies.
 
 🌐 **Live Demo**  
-🔗 [https://crowdshield-system.netlify.app](https://ghosttrace-agents-gray.vercel.app/)
+🔗 https://ghosttrace-agents-gray.vercel.app/
 
 ---
 
